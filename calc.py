@@ -11,4 +11,8 @@ def damage_formula(L: int, P: int, A: int, D: int, M: list[float]) -> int:
     
     return dmg
 
-print(damage_formula(75, 65, 123, 163, [1.5, 4]))
+BASE_HP = int(input("BASE HP:  "))
+BASE_DEF = int(input("BASE DEF: "))
+BUDGET = int(input("BUDGET:   "))
+
+print(damage_formula(75, 65, 123, 163, [0.85, 1.5, 4]))
