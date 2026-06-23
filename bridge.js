@@ -1,4 +1,4 @@
-// bridge.js — called by Python via subprocess
+// bridge.js - called by Python via subprocess
 // stdin: JSON with attacker, defender, move, field
 // stdout: JSON with rolls, min, max, desc
 

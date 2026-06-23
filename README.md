@@ -46,7 +46,7 @@ You'll be prompted for, in order:
 Defender already has 14 SPs in HP and 0 in DEF, and you've got 30 more SPs to spend:
 
 ```
-SPs already invested in HP                (0 if none): 14
+SPs already invested in HP (0 if none): 14
 SPs already invested in DEF (0 if none): 0
 Additional SP budget to spend (HP + DEF): 30
 ```
