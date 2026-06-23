@@ -50,9 +50,11 @@ def optimise(BASE_HP: int,
 
         if damage_dealt < minimum_dealt:
             minimum_dealt = damage_dealt
-            optimal_stats = {"HP_STATS": HP_STATS, "DEF_STATS": DEF_STATS, "DMG": DMG, "HP": HP}
+            optimal_stats = {"HP_STATS": HP_STATS, "DEF_STATS": DEF_STATS, "DMG": DMG, "HP": HP, "DEF": DEF}
 
-    print(f"Optimal spread:  {optimal_stats['HP_STATS']} SP → HP  |  {optimal_stats['DEF_STATS']} SP → DEF")
+    print(f"Optimal spread:  {optimal_stats['HP_STATS']} HP, {optimal_stats['DEF_STATS']} DEF")
+    print(f"Final HP stat:   {optimal_stats['HP']}")
+    print(f"Final DEF stat:  {optimal_stats['DEF']}")
     print(f"Damage dealt:    {optimal_stats['DMG']} / {optimal_stats['HP']} HP")
     print(f"% HP dealt:      {minimum_dealt * 100:.1f}%")
     print(f"% HP remaining:  {(1 - minimum_dealt) * 100:.1f}%")
