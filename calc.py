@@ -40,6 +40,7 @@ def optimise(
 
     optimal_stats = {}
     minimum_dealt = float('inf')
+    best_index = None
 
     for delta_def in range(0, min(BUDGET, 64) + 1):
         delta_hp = min(BUDGET, 64) - delta_def
@@ -69,6 +70,7 @@ def optimise(
 
         if damage_dealt < minimum_dealt:
             minimum_dealt = damage_dealt
+            best_index = len(xs) - 1
             optimal_stats = {
                 'HP_SP': HP_SP, 'DEF_SP': DEF_SP,
                 'delta_hp': delta_hp, 'delta_def': delta_def,
@@ -88,7 +90,13 @@ def optimise(
     print(f"% HP remaining:     {(1 - minimum_dealt) * 100:.1f}%")
     print(f"Desc:               {optimal_stats['desc']}")
 
-    plot(xs, ys, DEF_STAT)
+    plot(
+        xs, ys, DEF_STAT,
+        attacker_name=ATTACKER['name'],
+        defender_name=DEFENDER_NAME,
+        move_name=MOVE['name'],
+        best_index=best_index,
+    )
     return minimum_dealt
 
 
