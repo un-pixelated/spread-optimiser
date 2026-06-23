@@ -52,7 +52,7 @@ process.stdin.on("end", () => {
       isReflect: field?.isReflect ?? false,
       isLightScreen: field?.isLightScreen ?? false,
       isAuroraVeil: field?.isAuroraVeil ?? false,
-      isHelpingHand: field?.isHelpingHand ?? false,
+      isFriendGuard: field?.isFriendGuard ?? false,
     },
     attackerSide: {
       isHelpingHand: field?.isHelpingHand ?? false,

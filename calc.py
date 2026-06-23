@@ -31,6 +31,7 @@ def optimise(
     ATTACKER: dict,
     DEFENDER_NAME: str,
     DEFENDER_NATURE: str,
+    DEFENDER_ABILITY: str,
     DEF_STAT: str,
     DEFENDER_BOOST: int,
     EXISTING_HP: int,
@@ -56,10 +57,11 @@ def optimise(
             continue
 
         defender = {
-            'name':   DEFENDER_NAME,
-            'nature': DEFENDER_NATURE,
-            'sp':     {'hp': HP_SP, DEF_STAT: DEF_SP},
-            'boosts': {DEF_STAT: DEFENDER_BOOST},
+            'name':    DEFENDER_NAME,
+            'nature':  DEFENDER_NATURE,
+            'ability': DEFENDER_ABILITY,
+            'sp':      {'hp': HP_SP, DEF_STAT: DEF_SP},
+            'boosts':  {DEF_STAT: DEFENDER_BOOST},
         }
 
         result       = calc_damage(ATTACKER, defender, MOVE, FIELD)
@@ -107,14 +109,16 @@ def optimise(
 
 # ── inputs ──────────────────────────────────────────────
 attacker = {
-    'name':   input('Attacker name:   '),
-    'nature': input('Attacker nature: '),
-    'item':   input('Attacker item:   ') or None,
-    'sp':     eval(input('Attacker SPs:    ')),   # e.g. {"atk": 32}
+    'name':    input('Attacker name:    '),
+    'nature':  input('Attacker nature:  '),
+    'item':    input('Attacker item:    ') or None,
+    'ability': input('Attacker ability (or blank): ') or None,
+    'sp':      eval(input('Attacker SPs:     ')),   # e.g. {"atk": 32}
 }
 
-defender_name   = input('Defender name:   ')
-defender_nature = input('Defender nature: ')
+defender_name    = input('Defender name:    ')
+defender_nature  = input('Defender nature:  ')
+defender_ability = input('Defender ability (or blank): ') or None
 
 move = {
     'name':   input('Move name:  '),
@@ -141,20 +145,33 @@ while defensive_stat not in ('def', 'spd'):
 defender_boost = clamp_boost(int(input(
     f'Defender {defensive_stat.upper()} stage boost (-6 to +6, 0 if none): ') or 0))
 
-existing_hp  = int(input('SPs already invested in HP (0 if none): ') or 0)
+existing_hp  = int(input('SPs already invested in HP                (0 if none): ') or 0)
 existing_def = int(input(f'SPs already invested in {defensive_stat.upper()} (0 if none): ') or 0)
 
 budget = int(input(f'Additional SP budget to spend (HP + {defensive_stat.upper()}): '))
 
+# Terrain works the same regardless of what set it — a move (Electric
+# Terrain), or an ability (Hadron Engine, Electric Surge, etc.) — as long
+# as the relevant Pokémon's ability is entered above, terrain-linked
+# abilities like Hadron Engine's SpA boost are picked up automatically.
+TERRAINS = {'electric': 'Electric', 'grassy': 'Grassy', 'misty': 'Misty', 'psychic': 'Psychic', '': None}
+terrain_in = input('Terrain (Electric/Grassy/Misty/Psychic, or blank): ').strip().lower()
+while terrain_in not in TERRAINS:
+    terrain_in = input("Please type Electric/Grassy/Misty/Psychic, or leave blank: ").strip().lower()
+terrain = TERRAINS[terrain_in]
+
 field = {
-    'gameType':    input('Game type (Singles/Doubles): '),
-    'weather':     input('Weather (or blank):          ') or None,
-    'isReflect':   input('Reflect? (y/n): ').lower() == 'y',
+    'gameType':      input('Game type (Singles/Doubles): '),
+    'weather':       input('Weather (or blank):          ') or None,
+    'terrain':       terrain,
+    'isReflect':     input('Reflect? (y/n): ').lower() == 'y',
     'isLightScreen': input('Light Screen? (y/n): ').lower() == 'y',
+    'isHelpingHand': input("Helping Hand active for attacker? (y/n): ").lower() == 'y',
+    'isFriendGuard': input("Friend Guard active for defender's side? (y/n): ").lower() == 'y',
 }
 
 optimise(
-    attacker, defender_name, defender_nature,
+    attacker, defender_name, defender_nature, defender_ability,
     defensive_stat, defender_boost, existing_hp, existing_def,
     budget, move, field,
 )

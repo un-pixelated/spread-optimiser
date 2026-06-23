@@ -22,8 +22,8 @@ python3 calc.py
 
 You'll be prompted for, in order:
 
-1. **Attacker** — name, nature, item, SPs as a Python dict, e.g. `{"atk": 32}`.
-2. **Defender** — name, nature. Base HP is pulled automatically from species data, no need to type it in.
+1. **Attacker** — name, nature, item, ability (or blank), SPs as a Python dict, e.g. `{"atk": 32}`.
+2. **Defender** — name, nature, ability (or blank). Base HP is pulled automatically from species data.
 3. **Move** — name, whether it's a crit.
 4. **Attacking stat this move uses** — `atk` or `spa`.
 5. **Attacker's stage boost** on that stat (-6 to +6, 0 if none) — e.g. a Swords Dance boost.
@@ -32,12 +32,13 @@ You'll be prompted for, in order:
    - A few special moves break that rule (Psyshock, Psystrike, Secret Sword hit `def` instead of `spd`) — just type whichever one actually applies to your move.
 7. **Defender's stage boost** on that stat (-6 to +6, 0 if none) — e.g. an Iron Defense boost.
 8. **SPs already invested** — if the defender already has SPs sunk into HP and/or the relevant defensive stat, enter them here (0 for a fresh spread).
-9. **Additional SP budget** — how many *more* SPs you have to spend across HP + the defensive stat. Each stat is capped at 32, same as in-game.
-10. **Field conditions** — game type, weather, screens.
+9. **Additional SP budget** — how many _more_ SPs you have to spend across HP + the defensive stat. Each stat is capped at 32, same as in-game.
+10. **Terrain** — Electric/Grassy/Misty/Psychic, or blank for none. Works the same whether it came from a move or an ability — e.g. enter the attacker's ability as `Hadron Engine` and set terrain to `Electric` and its Special Attack boost is applied automatically.
+11. **Field conditions** — game type, weather, screens, Helping Hand (attacker's side), Friend Guard (defender's side).
 
 ## Output
 
-- **Console**: every additional-SP split tried, then the optimal one (lowest % HP dealt), showing exactly how much *more* HP/DEF(or SPD) you need on top of what's already invested.
+- **Console**: every additional-SP split tried, then the optimal one (lowest % HP dealt), showing exactly how much _more_ HP/DEF(or SPD) you need on top of what's already invested.
 - **plot.png**: % HP dealt across every spread tried, saved in the project folder.
 
 ## Example
