@@ -1,6 +1,7 @@
 # Defensive optimiser for Pokémon Champions
 
 import math
+from plot import plot
 
 def ROUND(num: float) -> int:
     return math.ceil(num - 0.5)
@@ -32,8 +33,12 @@ def optimise(BASE_HP: int,
              ATTACK: int,
              MULT: list[float]
              ) -> float:
+    xs = []
+    ys = []
+
     optimal_stats = {}
     minimum_dealt = float("inf")
+
     for i in range(BUDGET + 1):
         DEF_STATS = i
         HP_STATS = BUDGET - DEF_STATS
@@ -48,6 +53,9 @@ def optimise(BASE_HP: int,
         DMG = damage_formula(POWER, ATTACK, DEF, MULT)
         damage_dealt = DMG / HP
 
+        xs.append((HP_STATS, DEF_STATS))
+        ys.append(damage_dealt)
+
         if damage_dealt < minimum_dealt:
             minimum_dealt = damage_dealt
             optimal_stats = {"HP_STATS": HP_STATS, "DEF_STATS": DEF_STATS, "DMG": DMG, "HP": HP, "DEF": DEF}
@@ -58,6 +66,8 @@ def optimise(BASE_HP: int,
     print(f"Damage dealt:    {optimal_stats['DMG']} / {optimal_stats['HP']} HP")
     print(f"% HP dealt:      {minimum_dealt * 100:.1f}%")
     print(f"% HP remaining:  {(1 - minimum_dealt) * 100:.1f}%")
+
+    plot(xs, ys)
 
     return minimum_dealt
 
