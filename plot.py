@@ -6,4 +6,4 @@ def plot(xs: list[tuple[int, int]], ys: list[float]):
     plt.ylabel("% HP dealt (max roll)")
     plt.xticks(rotation=90)
     plt.tight_layout()
-    plt.show()
+    plt.savefig("plot")
