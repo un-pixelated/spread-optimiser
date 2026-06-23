@@ -1,74 +1,109 @@
 # Defensive optimiser for Pokémon Champions
+# Uses @smogon/calc via bridge.js for damage calculation
 
+import subprocess
+import json
 import math
 from plot import plot
 
-def ROUND(num: float) -> int:
-    return math.ceil(num - 0.5)
+BRIDGE = './bridge.js'
 
-def damage_formula(P: int, A: int, D: int, M: list[float]) -> int:
-    dmg = ROUND((((2 * 50) / 5 + 2) * P * A / D) / 50 + 2)
-    
-    for modifier in M:
-        dmg = ROUND(dmg * modifier)
-    
-    return dmg
+def calc_damage(attacker, defender, move, field) -> dict:
+    payload = json.dumps({
+        'attacker': attacker,
+        'defender': defender,
+        'move': move,
+        'field': field,
+    })
+    result = subprocess.run(
+        ['node', BRIDGE],
+        input=payload, capture_output=True, text=True
+    )
+    return json.loads(result.stdout)
 
-BASE_HP = int(input("BASE HP:  "))
-BASE_DEF = int(input("BASE DEF: "))
-NATURE = float(input("NATURE:   "))
-DEF_MULT = float(input("DEF MULT: "))
-BUDGET = min(int(input("BUDGET:   ")), 64)
+def calc_hp(base: int, sp: int) -> int:
+    return base + sp + 75
 
-POWER = int(input("POWER:    "))
-ATTACK = int(input("ATTACK:   "))
-MULT = eval(input("MULT:     "))
-
-def optimise(BASE_HP: int,
-             BASE_DEF: int,
-             NATURE: float,
-             DEF_MULT: float,
-             BUDGET: int,
-             POWER: int,
-             ATTACK: int,
-             MULT: list[float]
-             ) -> float:
+def optimise(
+    ATTACKER: dict,
+    DEFENDER_NAME: str,
+    DEFENDER_NATURE: str,
+    BASE_HP: int,
+    BUDGET: int,
+    MOVE: dict,
+    FIELD: dict,
+) -> float:
     xs = []
     ys = []
 
     optimal_stats = {}
-    minimum_dealt = float("inf")
+    minimum_dealt = float('inf')
 
-    for i in range(BUDGET + 1):
-        DEF_STATS = i
-        HP_STATS = BUDGET - DEF_STATS
+    for i in range(min(BUDGET, 64) + 1):
+        DEF_SP = i
+        HP_SP  = min(BUDGET, 64) - DEF_SP
 
-        if DEF_STATS > 32 or HP_STATS > 32:
+        if DEF_SP > 32 or HP_SP > 32:
             continue
 
-        HP = BASE_HP + HP_STATS + 75
-        DEF = math.floor((BASE_DEF + DEF_STATS + 20) * NATURE)
-        DEF = math.floor(DEF * DEF_MULT)
-        
-        DMG = damage_formula(POWER, ATTACK, DEF, MULT)
+        defender = {
+            'name':   DEFENDER_NAME,
+            'nature': DEFENDER_NATURE,
+            'sp':     {'hp': HP_SP, 'def': DEF_SP},
+        }
+
+        result       = calc_damage(ATTACKER, defender, MOVE, FIELD)
+        HP           = calc_hp(BASE_HP, HP_SP)
+        DMG          = result['max']
         damage_dealt = DMG / HP
 
-        xs.append((HP_STATS, DEF_STATS))
+        xs.append((HP_SP, DEF_SP))
         ys.append(damage_dealt)
+
+        print(f"({HP_SP}, {DEF_SP}) -> {damage_dealt * 100:.2f}%  [{result['desc']}]")
 
         if damage_dealt < minimum_dealt:
             minimum_dealt = damage_dealt
-            optimal_stats = {"HP_STATS": HP_STATS, "DEF_STATS": DEF_STATS, "DMG": DMG, "HP": HP, "DEF": DEF}
+            optimal_stats = {
+                'HP_SP': HP_SP, 'DEF_SP': DEF_SP,
+                'DMG': DMG, 'HP': HP,
+                'desc': result['desc'],
+            }
 
-    print(f"Optimal spread:  {optimal_stats['HP_STATS']} HP, {optimal_stats['DEF_STATS']} DEF")
-    print(f"Final HP stat:   {optimal_stats['HP']}")
-    print(f"Final DEF stat:  {optimal_stats['DEF']}")
+    print()
+    print(f"Optimal spread:  {optimal_stats['HP_SP']} HP, {optimal_stats['DEF_SP']} DEF")
     print(f"Damage dealt:    {optimal_stats['DMG']} / {optimal_stats['HP']} HP")
     print(f"% HP dealt:      {minimum_dealt * 100:.1f}%")
     print(f"% HP remaining:  {(1 - minimum_dealt) * 100:.1f}%")
+    print(f"Desc:            {optimal_stats['desc']}")
 
     plot(xs, ys)
-
     return minimum_dealt
 
-optimise(BASE_HP, BASE_DEF, NATURE, DEF_MULT, BUDGET, POWER, ATTACK, MULT)
+
+# ── inputs ──────────────────────────────────────────────
+attacker = {
+    'name':   input('Attacker name:   '),
+    'nature': input('Attacker nature: '),
+    'item':   input('Attacker item:   ') or None,
+    'sp':     eval(input('Attacker SPs:    ')),   # e.g. {"atk": 32}
+}
+
+defender_name   = input('Defender name:   ')
+defender_nature = input('Defender nature: ')
+base_hp         = int(input('Defender base HP: '))
+budget          = int(input('SP budget:        '))
+
+move = {
+    'name':   input('Move name:  '),
+    'isCrit': input('Crit? (y/n): ').lower() == 'y',
+}
+
+field = {
+    'gameType':    input('Game type (Singles/Doubles): '),
+    'weather':     input('Weather (or blank):          ') or None,
+    'isReflect':   input('Reflect? (y/n): ').lower() == 'y',
+    'isLightScreen': input('Light Screen? (y/n): ').lower() == 'y',
+}
+
+optimise(attacker, defender_name, defender_nature, base_hp, budget, move, field)
