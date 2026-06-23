@@ -23,7 +23,7 @@ python3 calc.py
 You'll be prompted for, in order:
 
 1. **Attacker** — name, nature, item, SPs as a Python dict, e.g. `{"atk": 32}`.
-2. **Defender** — name, nature, base HP.
+2. **Defender** — name, nature. Base HP is pulled automatically from species data, no need to type it in.
 3. **Move** — name, whether it's a crit.
 4. **Defensive stat the move hits** — `def` or `spd`.
    - Physical moves usually hit `def`, special moves usually hit `spd`.

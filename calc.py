@@ -28,7 +28,6 @@ def optimise(
     ATTACKER: dict,
     DEFENDER_NAME: str,
     DEFENDER_NATURE: str,
-    BASE_HP: int,
     DEF_STAT: str,
     EXISTING_HP: int,
     EXISTING_DEF: int,
@@ -58,7 +57,7 @@ def optimise(
         }
 
         result       = calc_damage(ATTACKER, defender, MOVE, FIELD)
-        HP           = calc_hp(BASE_HP, HP_SP)
+        HP           = calc_hp(result['defenderBaseHp'], HP_SP)
         DMG          = result['max']
         damage_dealt = DMG / HP
 
@@ -103,7 +102,6 @@ attacker = {
 
 defender_name   = input('Defender name:   ')
 defender_nature = input('Defender nature: ')
-base_hp         = int(input('Defender base HP: '))
 
 move = {
     'name':   input('Move name:  '),
@@ -131,7 +129,7 @@ field = {
 }
 
 optimise(
-    attacker, defender_name, defender_nature, base_hp,
+    attacker, defender_name, defender_nature,
     defensive_stat, existing_hp, existing_def,
     budget, move, field,
 )

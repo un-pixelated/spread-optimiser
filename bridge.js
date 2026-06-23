@@ -65,6 +65,7 @@ process.stdin.on("end", () => {
       rolls: result.damage,
       min,
       max,
+      defenderBaseHp: def.species.baseStats.hp,
       desc: result.desc(),
       koChance: result.kochance().text,
     }),
