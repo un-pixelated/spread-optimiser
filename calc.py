@@ -32,6 +32,7 @@ def optimise(
     DEFENDER_NAME: str,
     DEFENDER_NATURE: str,
     DEFENDER_ABILITY: str,
+    DEFENDER_ITEM: str | None,
     DEF_STAT: str,
     DEFENDER_BOOST: int,
     EXISTING_HP: int,
@@ -59,6 +60,7 @@ def optimise(
         defender = {
             'name':    DEFENDER_NAME,
             'nature':  DEFENDER_NATURE,
+            'item':    DEFENDER_ITEM,
             'ability': DEFENDER_ABILITY,
             'sp':      {'hp': HP_SP, DEF_STAT: DEF_SP},
             'boosts':  {DEF_STAT: DEFENDER_BOOST},
@@ -119,6 +121,7 @@ attacker = {
 defender_name    = input('Defender name:    ')
 defender_nature  = input('Defender nature:  ')
 defender_ability = input('Defender ability (or blank): ') or None
+defender_item    = input('Defender item (or blank):    ') or None
 
 move = {
     'name':   input('Move name:  '),
@@ -171,7 +174,7 @@ field = {
 }
 
 optimise(
-    attacker, defender_name, defender_nature, defender_ability,
+    attacker, defender_name, defender_nature, defender_ability, defender_item,
     defensive_stat, defender_boost, existing_hp, existing_def,
     budget, move, field,
 )
