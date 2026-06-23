@@ -141,7 +141,7 @@ while defensive_stat not in ('def', 'spd'):
 defender_boost = clamp_boost(int(input(
     f'Defender {defensive_stat.upper()} stage boost (-6 to +6, 0 if none): ') or 0))
 
-existing_hp  = int(input('SPs already invested in HP                (0 if none): ') or 0)
+existing_hp  = int(input('SPs already invested in HP (0 if none): ') or 0)
 existing_def = int(input(f'SPs already invested in {defensive_stat.upper()} (0 if none): ') or 0)
 
 budget = int(input(f'Additional SP budget to spend (HP + {defensive_stat.upper()}): '))
