@@ -29,6 +29,9 @@ def optimise(
     DEFENDER_NAME: str,
     DEFENDER_NATURE: str,
     BASE_HP: int,
+    DEF_STAT: str,
+    EXISTING_HP: int,
+    EXISTING_DEF: int,
     BUDGET: int,
     MOVE: dict,
     FIELD: dict,
@@ -39,17 +42,19 @@ def optimise(
     optimal_stats = {}
     minimum_dealt = float('inf')
 
-    for i in range(min(BUDGET, 64) + 1):
-        DEF_SP = i
-        HP_SP  = min(BUDGET, 64) - DEF_SP
+    for delta_def in range(0, min(BUDGET, 64) + 1):
+        delta_hp = min(BUDGET, 64) - delta_def
 
-        if DEF_SP > 32 or HP_SP > 32:
+        HP_SP  = EXISTING_HP + delta_hp
+        DEF_SP = EXISTING_DEF + delta_def
+
+        if HP_SP > 32 or DEF_SP > 32:
             continue
 
         defender = {
             'name':   DEFENDER_NAME,
             'nature': DEFENDER_NATURE,
-            'sp':     {'hp': HP_SP, 'def': DEF_SP},
+            'sp':     {'hp': HP_SP, DEF_STAT: DEF_SP},
         }
 
         result       = calc_damage(ATTACKER, defender, MOVE, FIELD)
@@ -60,24 +65,31 @@ def optimise(
         xs.append((HP_SP, DEF_SP))
         ys.append(damage_dealt)
 
-        print(f"({HP_SP}, {DEF_SP}) -> {damage_dealt * 100:.2f}%  [{result['desc']}]")
+        print(f"+{delta_hp:>2} HP / +{delta_def:>2} {DEF_STAT.upper()}  "
+              f"(totals {HP_SP}/{DEF_SP}) -> {damage_dealt * 100:.2f}%  [{result['desc']}]")
 
         if damage_dealt < minimum_dealt:
             minimum_dealt = damage_dealt
             optimal_stats = {
                 'HP_SP': HP_SP, 'DEF_SP': DEF_SP,
+                'delta_hp': delta_hp, 'delta_def': delta_def,
                 'DMG': DMG, 'HP': HP,
                 'desc': result['desc'],
             }
 
-    print()
-    print(f"Optimal spread:  {optimal_stats['HP_SP']} HP, {optimal_stats['DEF_SP']} DEF")
-    print(f"Damage dealt:    {optimal_stats['DMG']} / {optimal_stats['HP']} HP")
-    print(f"% HP dealt:      {minimum_dealt * 100:.1f}%")
-    print(f"% HP remaining:  {(1 - minimum_dealt) * 100:.1f}%")
-    print(f"Desc:            {optimal_stats['desc']}")
+    if not optimal_stats:
+        print("No valid spread found — check your existing SPs / budget don't push either stat past 32.")
+        return None
 
-    plot(xs, ys)
+    print()
+    print(f"Optimal spread:     {optimal_stats['HP_SP']} HP, {optimal_stats['DEF_SP']} {DEF_STAT.upper()}")
+    print(f"Additional needed:  +{optimal_stats['delta_hp']} HP, +{optimal_stats['delta_def']} {DEF_STAT.upper()}")
+    print(f"Damage dealt:       {optimal_stats['DMG']} / {optimal_stats['HP']} HP")
+    print(f"% HP dealt:         {minimum_dealt * 100:.1f}%")
+    print(f"% HP remaining:     {(1 - minimum_dealt) * 100:.1f}%")
+    print(f"Desc:               {optimal_stats['desc']}")
+
+    plot(xs, ys, DEF_STAT)
     return minimum_dealt
 
 
@@ -92,12 +104,24 @@ attacker = {
 defender_name   = input('Defender name:   ')
 defender_nature = input('Defender nature: ')
 base_hp         = int(input('Defender base HP: '))
-budget          = int(input('SP budget:        '))
 
 move = {
     'name':   input('Move name:  '),
     'isCrit': input('Crit? (y/n): ').lower() == 'y',
 }
+
+# Which defensive stat the move actually hits. Physical moves usually hit
+# `def`, special moves usually hit `spd` — but a few special moves
+# (Psyshock, Psystrike, Secret Sword...) hit DEF instead. Rather than guess
+# off the move's category, just say which one applies.
+defensive_stat = input('Defensive stat this move hits - def/spd: ').strip().lower()
+while defensive_stat not in ('def', 'spd'):
+    defensive_stat = input("Please type 'def' or 'spd': ").strip().lower()
+
+existing_hp  = int(input('SPs already invested in HP                (0 if none): ') or 0)
+existing_def = int(input(f'SPs already invested in {defensive_stat.upper()} (0 if none): ') or 0)
+
+budget = int(input(f'Additional SP budget to spend (HP + {defensive_stat.upper()}): '))
 
 field = {
     'gameType':    input('Game type (Singles/Doubles): '),
@@ -106,4 +130,8 @@ field = {
     'isLightScreen': input('Light Screen? (y/n): ').lower() == 'y',
 }
 
-optimise(attacker, defender_name, defender_nature, base_hp, budget, move, field)
+optimise(
+    attacker, defender_name, defender_nature, base_hp,
+    defensive_stat, existing_hp, existing_def,
+    budget, move, field,
+)
