@@ -17,7 +17,7 @@ BASE_HP = int(input("BASE HP:  "))
 BASE_DEF = int(input("BASE DEF: "))
 NATURE = float(input("NATURE:   "))
 DEF_MULT = float(input("DEF MULT: "))
-BUDGET = int(input("BUDGET:   "))
+BUDGET = min(int(input("BUDGET:   ")), 64)
 
 POWER = int(input("POWER:    "))
 ATTACK = int(input("ATTACK:   "))
