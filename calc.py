@@ -24,11 +24,15 @@ def calc_damage(attacker, defender, move, field) -> dict:
 def calc_hp(base: int, sp: int) -> int:
     return base + sp + 75
 
+def clamp_boost(n: int) -> int:
+    return max(-6, min(6, n))
+
 def optimise(
     ATTACKER: dict,
     DEFENDER_NAME: str,
     DEFENDER_NATURE: str,
     DEF_STAT: str,
+    DEFENDER_BOOST: int,
     EXISTING_HP: int,
     EXISTING_DEF: int,
     BUDGET: int,
@@ -55,6 +59,7 @@ def optimise(
             'name':   DEFENDER_NAME,
             'nature': DEFENDER_NATURE,
             'sp':     {'hp': HP_SP, DEF_STAT: DEF_SP},
+            'boosts': {DEF_STAT: DEFENDER_BOOST},
         }
 
         result       = calc_damage(ATTACKER, defender, MOVE, FIELD)
@@ -116,13 +121,25 @@ move = {
     'isCrit': input('Crit? (y/n): ').lower() == 'y',
 }
 
-# Which defensive stat the move actually hits. Physical moves usually hit
-# `def`, special moves usually hit `spd` — but a few special moves
-# (Psyshock, Psystrike, Secret Sword...) hit DEF instead. Rather than guess
-# off the move's category, just say which one applies.
+# Which stat the move's damage is actually calculated off, on each side.
+# Physical moves usually use atk/def, special moves usually use spa/spd —
+# but a few moves break that (Psyshock/Psystrike/Secret Sword hit DEF
+# despite being special; Body Press uses the attacker's own DEF, etc).
+# Rather than guess off the move's category, just say which ones apply.
+attacking_stat = input('Attacking stat this move uses - atk/spa: ').strip().lower()
+while attacking_stat not in ('atk', 'spa'):
+    attacking_stat = input("Please type 'atk' or 'spa': ").strip().lower()
+
+attacker_boost = clamp_boost(int(input(
+    f'Attacker {attacking_stat.upper()} stage boost (-6 to +6, 0 if none): ') or 0))
+attacker['boosts'] = {attacking_stat: attacker_boost}
+
 defensive_stat = input('Defensive stat this move hits - def/spd: ').strip().lower()
 while defensive_stat not in ('def', 'spd'):
     defensive_stat = input("Please type 'def' or 'spd': ").strip().lower()
+
+defender_boost = clamp_boost(int(input(
+    f'Defender {defensive_stat.upper()} stage boost (-6 to +6, 0 if none): ') or 0))
 
 existing_hp  = int(input('SPs already invested in HP                (0 if none): ') or 0)
 existing_def = int(input(f'SPs already invested in {defensive_stat.upper()} (0 if none): ') or 0)
@@ -138,6 +155,6 @@ field = {
 
 optimise(
     attacker, defender_name, defender_nature,
-    defensive_stat, existing_hp, existing_def,
+    defensive_stat, defender_boost, existing_hp, existing_def,
     budget, move, field,
 )

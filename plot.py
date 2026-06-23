@@ -41,7 +41,7 @@ def plot(
             ha="center", fontsize=9, fontweight="bold", color=HILITE,
         )
 
-    title = f"{move_name or 'Attack'} → {defender_name or 'Defender'}"
+    title = f"{move_name or 'Attack'} -> {defender_name or 'Defender'}"
     if attacker_name:
         title += f"  (atk: {attacker_name})"
     ax.set_title(title, fontsize=13, fontweight="bold", pad=14)

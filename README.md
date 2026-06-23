@@ -25,12 +25,15 @@ You'll be prompted for, in order:
 1. **Attacker** — name, nature, item, SPs as a Python dict, e.g. `{"atk": 32}`.
 2. **Defender** — name, nature. Base HP is pulled automatically from species data, no need to type it in.
 3. **Move** — name, whether it's a crit.
-4. **Defensive stat the move hits** — `def` or `spd`.
+4. **Attacking stat this move uses** — `atk` or `spa`.
+5. **Attacker's stage boost** on that stat (-6 to +6, 0 if none) — e.g. a Swords Dance boost.
+6. **Defensive stat the move hits** — `def` or `spd`.
    - Physical moves usually hit `def`, special moves usually hit `spd`.
    - A few special moves break that rule (Psyshock, Psystrike, Secret Sword hit `def` instead of `spd`) — just type whichever one actually applies to your move.
-5. **SPs already invested** — if the defender already has SPs sunk into HP and/or the relevant defensive stat, enter them here (0 for a fresh spread).
-6. **Additional SP budget** — how many *more* SPs you have to spend across HP + the defensive stat. Each stat is capped at 32, same as in-game.
-7. **Field conditions** — game type, weather, screens.
+7. **Defender's stage boost** on that stat (-6 to +6, 0 if none) — e.g. an Iron Defense boost.
+8. **SPs already invested** — if the defender already has SPs sunk into HP and/or the relevant defensive stat, enter them here (0 for a fresh spread).
+9. **Additional SP budget** — how many *more* SPs you have to spend across HP + the defensive stat. Each stat is capped at 32, same as in-game.
+10. **Field conditions** — game type, weather, screens.
 
 ## Output
 

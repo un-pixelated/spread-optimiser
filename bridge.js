@@ -26,6 +26,7 @@ process.stdin.on("end", () => {
     evs: Object.fromEntries(
       Object.entries(attacker.sp ?? {}).map(([k, v]) => [k, v * 8]),
     ),
+    boosts: attacker.boosts ?? {},
   });
 
   const def = new Pokemon(gen, defender.name, {
@@ -36,6 +37,7 @@ process.stdin.on("end", () => {
     evs: Object.fromEntries(
       Object.entries(defender.sp ?? {}).map(([k, v]) => [k, v * 8]),
     ),
+    boosts: defender.boosts ?? {},
   });
 
   const mv = new Move(gen, move.name, {
