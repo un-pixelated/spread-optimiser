@@ -68,6 +68,7 @@ process.stdin.on("end", () => {
       min,
       max,
       defenderBaseHp: def.species.baseStats.hp,
+      moveType: mv.type,
       desc: result.desc(),
       koChance: result.kochance().text,
     }),
