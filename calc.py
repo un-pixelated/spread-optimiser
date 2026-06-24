@@ -43,6 +43,7 @@ def optimise(
 ) -> float:
     xs = []
     ys = []
+    move_type = ''
 
     optimal_stats = {}
     minimum_dealt = float('inf')
@@ -67,6 +68,8 @@ def optimise(
         }
 
         result       = calc_damage(ATTACKER, defender, MOVE, FIELD)
+        if not xs:  # capture move type on first call
+            move_type = result.get('moveType', '')
         HP           = calc_hp(result['defenderBaseHp'], HP_SP)
         DMG          = result['max']
         damage_dealt = DMG / HP
@@ -104,7 +107,11 @@ def optimise(
         attacker_name=ATTACKER['name'],
         defender_name=DEFENDER_NAME,
         move_name=MOVE['name'],
+        move_type=move_type,
         best_index=best_index,
+        best_dmg=optimal_stats['DMG'],
+        best_hp=optimal_stats['HP'],
+        best_desc=optimal_stats['desc'],
     )
     return minimum_dealt
 
