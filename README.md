@@ -23,7 +23,7 @@ python3 calc.py
 You'll be prompted for, in order:
 
 1. **Attacker** — name, nature, item, ability (or blank), SPs as a Python dict, e.g. `{"atk": 32}`.
-2. **Defender** — name, nature, ability (or blank). Base HP is pulled automatically from species data.
+2. **Defender** — name, nature, item, ability (or blank). Base HP is pulled automatically from species data.
 3. **Move** — name, whether it's a crit.
 4. **Attacking stat this move uses** — `atk` or `spa`.
 5. **Attacker's stage boost** on that stat (-6 to +6, 0 if none) — e.g. a Swords Dance boost.
