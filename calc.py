@@ -154,7 +154,7 @@ def optimise(
 
         print()
         print("─" * 60)
-        print(f"  TUNED OPTIMAL  (priority: {priority.upper()}, tolerance: ±{tolerance}%)")
+        print(f"  TUNED OPTIMAL  (priority: {priority.upper()}, tolerance: +{tolerance}%)")
         print("─" * 60)
 
         if tuned is None or (
