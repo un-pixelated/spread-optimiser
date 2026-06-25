@@ -23,6 +23,28 @@ TYPE_COLORS = {
     "Stellar":  "#40B5A5",
 }
 
+TYPE_BG_COLORS = {
+    "Normal":   "#EEEEDD",
+    "Fire":     "#FDECD8",
+    "Water":    "#DDE8FD",
+    "Electric": "#FDF7D0",
+    "Grass":    "#E5F5DA",
+    "Ice":      "#E5F6F6",
+    "Fighting": "#F5DFDE",
+    "Poison":   "#EDD8ED",
+    "Ground":   "#FAF3DF",
+    "Flying":   "#EBE8FD",
+    "Psychic":  "#FEE2EC",
+    "Bug":      "#F0F2D8",
+    "Rock":     "#EEE8D8",
+    "Ghost":    "#DED8EC",
+    "Dragon":   "#E0D8FE",
+    "Dark":     "#E0DCD8",
+    "Steel":    "#EBEBF2",
+    "Fairy":    "#FCEEF2",
+    "Stellar":  "#D8F2EE",
+}
+
 KO_RED = "#ef4444"
 
 def plot(
@@ -42,12 +64,16 @@ def plot(
     labels = [str(x) for x in xs]
     pcts = [y * 100 for y in ys]
     line_color = TYPE_COLORS.get(move_type, "#7dd3fc")
+    bg_color   = TYPE_BG_COLORS.get(move_type, "#F0F4FF")
 
     with plt.style.context(matplotx.styles.pacoty):
         fig, ax = plt.subplots(figsize=(10, 5.5))
 
+        fig.patch.set_facecolor(bg_color)
+        ax.set_facecolor(bg_color)
+
         ax.plot(labels, pcts, color=line_color, linewidth=2, marker="o", markersize=3.5)
-        ax.grid(True, color="#aaaaaa", linewidth=0.6, alpha=0.6)
+        ax.grid(True, color=line_color, linewidth=0.6, alpha=0.35)
         ax.set_axisbelow(True)
 
         # KO line — solid red, full width
@@ -107,5 +133,5 @@ def plot(
         ax.tick_params(axis="x", rotation=90)
 
         fig.tight_layout()
-        fig.savefig("plot", dpi=150, facecolor=fig.get_facecolor())
+        fig.savefig("plot", dpi=150, facecolor=bg_color)
         plt.close(fig)
