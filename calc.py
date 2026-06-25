@@ -33,6 +33,33 @@ def calc_hp(base: int, sp: int) -> int:
 def clamp_boost(n: int) -> int:
     return max(-6, min(6, n))
 
+# ── tuner ────────────────────────────────────────────────
+# Among all spreads whose damage % is within `tolerance` pp of the
+# optimum, pick the one that maximises the prioritised stat's SP.
+# Ties broken by maximising the other stat.
+
+def tune(
+    results: list[dict],       # list of {HP_SP, DEF_SP, damage_dealt, DMG, HP, desc}
+    def_stat: str,
+    priority: str,             # 'hp' or def_stat
+    tolerance: float,          # percentage points, e.g. 0.5 means ±0.5%
+) -> dict | None:
+    if not results:
+        return None
+
+    best_pct = min(r['damage_dealt'] for r in results) * 100
+    threshold = best_pct + tolerance          # we accept up to this % damage
+
+    candidates = [r for r in results if r['damage_dealt'] * 100 <= threshold]
+    if not candidates:
+        return None
+
+    if priority == 'hp':
+        return max(candidates, key=lambda r: (r['HP_SP'], r[f'{def_stat}_SP']))
+    else:
+        return max(candidates, key=lambda r: (r[f'{def_stat}_SP'], r['HP_SP']))
+
+
 def optimise(
     ATTACKER: dict,
     DEFENDER_NAME: str,
@@ -46,10 +73,12 @@ def optimise(
     BUDGET: int,
     MOVE: dict,
     FIELD: dict,
+    TUNER: dict | None = None,   # {'priority': 'hp'|DEF_STAT, 'tolerance': float} or None
 ) -> float:
     xs = []
     ys = []
     move_type = ''
+    all_results = []
 
     optimal_stats = {}
     minimum_dealt = float('inf')
@@ -82,6 +111,12 @@ def optimise(
 
         xs.append((HP_SP, DEF_SP))
         ys.append(damage_dealt)
+        all_results.append({
+            'HP_SP': HP_SP, f'{DEF_STAT}_SP': DEF_SP,
+            'delta_hp': delta_hp, f'delta_{DEF_STAT}': delta_def,
+            'damage_dealt': damage_dealt, 'DMG': DMG, 'HP': HP,
+            'desc': result['desc'],
+        })
 
         print(f"+{delta_hp:>2} HP / +{delta_def:>2} {DEF_STAT.upper()}  "
               f"(totals {HP_SP}/{DEF_SP}) -> {damage_dealt * 100:.2f}%  [{result['desc']}]")
@@ -100,13 +135,45 @@ def optimise(
         print("No valid spread found — check your existing SPs / budget don't push either stat past 32.")
         return None
 
+    # ── optimal output ───────────────────────────────────
     print()
-    print(f"Optimal spread:     {optimal_stats['HP_SP']} HP, {optimal_stats['DEF_SP']} {DEF_STAT.upper()}")
-    print(f"Additional needed:  +{optimal_stats['delta_hp']} HP, +{optimal_stats['delta_def']} {DEF_STAT.upper()}")
-    print(f"Damage dealt:       {optimal_stats['DMG']} / {optimal_stats['HP']} HP")
-    print(f"% HP dealt:         {minimum_dealt * 100:.1f}%")
-    print(f"% HP remaining:     {(1 - minimum_dealt) * 100:.1f}%")
-    print(f"Desc:               {optimal_stats['desc']}")
+    print("─" * 60)
+    print("  OPTIMAL")
+    print("─" * 60)
+    print(f"  Spread:         {optimal_stats['HP_SP']} HP / {optimal_stats['DEF_SP']} {DEF_STAT.upper()}")
+    print(f"  Additional:     +{optimal_stats['delta_hp']} HP / +{optimal_stats['delta_def']} {DEF_STAT.upper()}")
+    print(f"  Damage:         {optimal_stats['DMG']} / {optimal_stats['HP']} HP  ({minimum_dealt * 100:.1f}% dealt, {(1 - minimum_dealt) * 100:.1f}% remaining)")
+    print(f"  Desc:           {optimal_stats['desc']}")
+
+    # ── tuner output ─────────────────────────────────────
+    if TUNER:
+        priority  = TUNER['priority']   # 'hp' or DEF_STAT
+        tolerance = TUNER['tolerance']  # percentage points
+
+        tuned = tune(all_results, DEF_STAT, priority, tolerance)
+
+        print()
+        print("─" * 60)
+        print(f"  TUNED OPTIMAL  (priority: {priority.upper()}, tolerance: ±{tolerance}%)")
+        print("─" * 60)
+
+        if tuned is None or (
+            tuned['HP_SP'] == optimal_stats['HP_SP'] and
+            tuned[f'{DEF_STAT}_SP'] == optimal_stats['DEF_SP']
+        ):
+            print("  No different spread found within tolerance — tuned result is identical to optimal.")
+        else:
+            t_pct   = tuned['damage_dealt'] * 100
+            opt_pct = minimum_dealt * 100
+            sacrifice = t_pct - opt_pct
+
+            print(f"  Spread:         {tuned['HP_SP']} HP / {tuned[f'{DEF_STAT}_SP']} {DEF_STAT.upper()}")
+            print(f"  Additional:     +{tuned['delta_hp']} HP / +{tuned[f'delta_{DEF_STAT}']} {DEF_STAT.upper()}")
+            print(f"  Damage:         {tuned['DMG']} / {tuned['HP']} HP  ({t_pct:.1f}% dealt, {100 - t_pct:.1f}% remaining)")
+            print(f"  Sacrifice:      +{sacrifice:.2f}% vs optimal")
+            print(f"  Desc:           {tuned['desc']}")
+
+    print("─" * 60)
 
     plot(
         xs, ys, DEF_STAT,
@@ -186,8 +253,20 @@ field = {
     'isFriendGuard': input("Friend Guard active for defender's side? (y/n): ").lower() == 'y',
 }
 
+# ── tuner ────────────────────────────────────────────────
+tuner = None
+use_tuner = input('Enable tuner mode? (y/n): ').strip().lower() == 'y'
+if use_tuner:
+    # Normalise stat label: hp stays hp, anything else -> defensive_stat
+    raw_priority = input(f'Prioritise stat (hp / {defensive_stat}): ').strip().lower()
+    priority = 'hp' if raw_priority == 'hp' else defensive_stat
+
+    tolerance = float(input("Tolerance — max % HP you're willing to sacrifice vs optimal (e.g. 0.5): ") or 0)
+    tuner = {'priority': priority, 'tolerance': tolerance}
+
 optimise(
     attacker, defender_name, defender_nature, defender_ability, defender_item,
     defensive_stat, defender_boost, existing_hp, existing_def,
     budget, move, field,
+    TUNER=tuner,
 )
