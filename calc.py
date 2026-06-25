@@ -3,9 +3,18 @@
 
 import subprocess
 import json
+import math
 from plot import plot
 
 BRIDGE = './bridge.js'
+
+# One persistent Node process for the whole run.
+_node = subprocess.Popen(
+    ['node', BRIDGE],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    text=True,
+)
 
 def calc_damage(attacker, defender, move, field) -> dict:
     payload = json.dumps({
@@ -13,45 +22,16 @@ def calc_damage(attacker, defender, move, field) -> dict:
         'defender': defender,
         'move': move,
         'field': field,
-    })
-    result = subprocess.run(
-        ['node', BRIDGE],
-        input=payload, capture_output=True, text=True
-    )
-    return json.loads(result.stdout)
+    }) + '\n'
+    _node.stdin.write(payload)
+    _node.stdin.flush()
+    return json.loads(_node.stdout.readline())
 
 def calc_hp(base: int, sp: int) -> int:
     return base + sp + 75
 
 def clamp_boost(n: int) -> int:
     return max(-6, min(6, n))
-
-# ── tuner ────────────────────────────────────────────────
-# Among all spreads whose damage % is within `tolerance` pp of the
-# optimum, pick the one that maximises the prioritised stat's SP.
-# Ties broken by maximising the other stat.
-
-def tune(
-    results: list[dict],       # list of {HP_SP, DEF_SP, damage_dealt, DMG, HP, desc}
-    def_stat: str,
-    priority: str,             # 'hp' or def_stat
-    tolerance: float,          # percentage points, e.g. 0.5 means ±0.5%
-) -> dict | None:
-    if not results:
-        return None
-
-    best_pct = min(r['damage_dealt'] for r in results) * 100
-    threshold = best_pct + tolerance          # we accept up to this % damage
-
-    candidates = [r for r in results if r['damage_dealt'] * 100 <= threshold]
-    if not candidates:
-        return None
-
-    if priority == 'hp':
-        return max(candidates, key=lambda r: (r['HP_SP'], r[f'{def_stat}_SP']))
-    else:
-        return max(candidates, key=lambda r: (r[f'{def_stat}_SP'], r['HP_SP']))
-
 
 def optimise(
     ATTACKER: dict,
@@ -66,12 +46,10 @@ def optimise(
     BUDGET: int,
     MOVE: dict,
     FIELD: dict,
-    TUNER: dict | None = None,   # {'priority': 'hp'|DEF_STAT, 'tolerance': float} or None
 ) -> float:
     xs = []
     ys = []
     move_type = ''
-    all_results = []
 
     optimal_stats = {}
     minimum_dealt = float('inf')
@@ -96,7 +74,7 @@ def optimise(
         }
 
         result       = calc_damage(ATTACKER, defender, MOVE, FIELD)
-        if not xs:
+        if not xs:  # capture move type on first call
             move_type = result.get('moveType', '')
         HP           = calc_hp(result['defenderBaseHp'], HP_SP)
         DMG          = result['max']
@@ -104,12 +82,6 @@ def optimise(
 
         xs.append((HP_SP, DEF_SP))
         ys.append(damage_dealt)
-        all_results.append({
-            'HP_SP': HP_SP, f'{DEF_STAT}_SP': DEF_SP,
-            'delta_hp': delta_hp, f'delta_{DEF_STAT}': delta_def,
-            'damage_dealt': damage_dealt, 'DMG': DMG, 'HP': HP,
-            'desc': result['desc'],
-        })
 
         print(f"+{delta_hp:>2} HP / +{delta_def:>2} {DEF_STAT.upper()}  "
               f"(totals {HP_SP}/{DEF_SP}) -> {damage_dealt * 100:.2f}%  [{result['desc']}]")
@@ -128,45 +100,13 @@ def optimise(
         print("No valid spread found — check your existing SPs / budget don't push either stat past 32.")
         return None
 
-    # ── optimal output ───────────────────────────────────
     print()
-    print("─" * 60)
-    print("  OPTIMAL")
-    print("─" * 60)
-    print(f"  Spread:         {optimal_stats['HP_SP']} HP / {optimal_stats['DEF_SP']} {DEF_STAT.upper()}")
-    print(f"  Additional:     +{optimal_stats['delta_hp']} HP / +{optimal_stats['delta_def']} {DEF_STAT.upper()}")
-    print(f"  Damage:         {optimal_stats['DMG']} / {optimal_stats['HP']} HP  ({minimum_dealt * 100:.1f}% dealt, {(1 - minimum_dealt) * 100:.1f}% remaining)")
-    print(f"  Desc:           {optimal_stats['desc']}")
-
-    # ── tuner output ─────────────────────────────────────
-    if TUNER:
-        priority  = TUNER['priority']   # 'hp' or DEF_STAT
-        tolerance = TUNER['tolerance']  # percentage points
-
-        tuned = tune(all_results, DEF_STAT, priority, tolerance)
-
-        print()
-        print("─" * 60)
-        print(f"  TUNED OPTIMAL  (priority: {priority.upper()}, tolerance: ±{tolerance}%)")
-        print("─" * 60)
-
-        if tuned is None or (
-            tuned['HP_SP'] == optimal_stats['HP_SP'] and
-            tuned[f'{DEF_STAT}_SP'] == optimal_stats['DEF_SP']
-        ):
-            print("  No different spread found within tolerance — tuned result is identical to optimal.")
-        else:
-            t_pct   = tuned['damage_dealt'] * 100
-            opt_pct = minimum_dealt * 100
-            sacrifice = t_pct - opt_pct
-
-            print(f"  Spread:         {tuned['HP_SP']} HP / {tuned[f'{DEF_STAT}_SP']} {DEF_STAT.upper()}")
-            print(f"  Additional:     +{tuned['delta_hp']} HP / +{tuned[f'delta_{DEF_STAT}']} {DEF_STAT.upper()}")
-            print(f"  Damage:         {tuned['DMG']} / {tuned['HP']} HP  ({t_pct:.1f}% dealt, {100 - t_pct:.1f}% remaining)")
-            print(f"  Sacrifice:      +{sacrifice:.2f}% vs optimal")
-            print(f"  Desc:           {tuned['desc']}")
-
-    print("─" * 60)
+    print(f"Optimal spread:     {optimal_stats['HP_SP']} HP, {optimal_stats['DEF_SP']} {DEF_STAT.upper()}")
+    print(f"Additional needed:  +{optimal_stats['delta_hp']} HP, +{optimal_stats['delta_def']} {DEF_STAT.upper()}")
+    print(f"Damage dealt:       {optimal_stats['DMG']} / {optimal_stats['HP']} HP")
+    print(f"% HP dealt:         {minimum_dealt * 100:.1f}%")
+    print(f"% HP remaining:     {(1 - minimum_dealt) * 100:.1f}%")
+    print(f"Desc:               {optimal_stats['desc']}")
 
     plot(
         xs, ys, DEF_STAT,
@@ -188,7 +128,7 @@ attacker = {
     'nature':  input('Attacker nature:  '),
     'item':    input('Attacker item:    ') or None,
     'ability': input('Attacker ability (or blank): ') or None,
-    'sp':      eval(input('Attacker SPs:     ')),
+    'sp':      eval(input('Attacker SPs:     ')),   # e.g. {"atk": 32}
 }
 
 defender_name    = input('Defender name:    ')
@@ -201,6 +141,11 @@ move = {
     'isCrit': input('Crit? (y/n): ').lower() == 'y',
 }
 
+# Which stat the move's damage is actually calculated off, on each side.
+# Physical moves usually use atk/def, special moves usually use spa/spd —
+# but a few moves break that (Psyshock/Psystrike/Secret Sword hit DEF
+# despite being special; Body Press uses the attacker's own DEF, etc).
+# Rather than guess off the move's category, just say which ones apply.
 attacking_stat = input('Attacking stat this move uses - atk/spa: ').strip().lower()
 while attacking_stat not in ('atk', 'spa'):
     attacking_stat = input("Please type 'atk' or 'spa': ").strip().lower()
@@ -221,6 +166,10 @@ existing_def = int(input(f'SPs already invested in {defensive_stat.upper()} (0 i
 
 budget = int(input(f'Additional SP budget to spend (HP + {defensive_stat.upper()}): '))
 
+# Terrain works the same regardless of what set it — a move (Electric
+# Terrain), or an ability (Hadron Engine, Electric Surge, etc.) — as long
+# as the relevant Pokémon's ability is entered above, terrain-linked
+# abilities like Hadron Engine's SpA boost are picked up automatically.
 TERRAINS = {'electric': 'Electric', 'grassy': 'Grassy', 'misty': 'Misty', 'psychic': 'Psychic', '': None}
 terrain_in = input('Terrain (Electric/Grassy/Misty/Psychic, or blank): ').strip().lower()
 while terrain_in not in TERRAINS:
@@ -237,20 +186,8 @@ field = {
     'isFriendGuard': input("Friend Guard active for defender's side? (y/n): ").lower() == 'y',
 }
 
-# ── tuner ────────────────────────────────────────────────
-tuner = None
-use_tuner = input('Enable tuner mode? (y/n): ').strip().lower() == 'y'
-if use_tuner:
-    # Normalise stat label: hp stays hp, anything else → defensive_stat
-    raw_priority = input(f'Prioritise stat (hp / {defensive_stat}): ').strip().lower()
-    priority = 'hp' if raw_priority in ('hp',) else defensive_stat
-
-    tolerance = float(input('Tolerance — max % HP you\'re willing to sacrifice vs optimal (e.g. 0.5): ') or 0)
-    tuner = {'priority': priority, 'tolerance': tolerance}
-
 optimise(
     attacker, defender_name, defender_nature, defender_ability, defender_item,
     defensive_stat, defender_boost, existing_hp, existing_def,
     budget, move, field,
-    TUNER=tuner,
 )

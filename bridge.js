@@ -1,6 +1,5 @@
-// bridge.js - called by Python via subprocess
-// stdin: JSON with attacker, defender, move, field
-// stdout: JSON with rolls, min, max, desc
+// bridge.js - persistent process, newline-delimited JSON on stdin/stdout
+// one request per line in, one response per line out
 
 const {
   calculate,
@@ -11,12 +10,18 @@ const {
 } = require("@smogon/calc");
 
 const gen = Generations.get(9);
+const readline = require("readline");
 
-process.stdin.setEncoding("utf8");
-let raw = "";
-process.stdin.on("data", (chunk) => (raw += chunk));
-process.stdin.on("end", () => {
-  const { attacker, defender, move, field } = JSON.parse(raw);
+const rl = readline.createInterface({
+  input: process.stdin,
+  crlfDelay: Infinity,
+});
+
+rl.on("line", (line) => {
+  line = line.trim();
+  if (!line) return;
+
+  const { attacker, defender, move, field } = JSON.parse(line);
 
   const atk = new Pokemon(gen, attacker.name, {
     level: 50,
@@ -62,7 +67,7 @@ process.stdin.on("end", () => {
   const result = calculate(gen, atk, def, mv, fd);
   const [min, max] = result.range();
 
-  console.log(
+  process.stdout.write(
     JSON.stringify({
       rolls: result.damage,
       min,
@@ -71,6 +76,6 @@ process.stdin.on("end", () => {
       moveType: mv.type,
       desc: result.desc(),
       koChance: result.kochance().text,
-    }),
+    }) + "\n",
   );
 });
