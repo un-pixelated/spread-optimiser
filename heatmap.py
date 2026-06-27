@@ -134,17 +134,6 @@ def _style_axes(ax, cbar, dark_acc, bg_color, vmin, vmax):
                      color=KO_RED, va='center', fontsize=8, fontweight='bold')
 
 
-# ── KO contour ────────────────────────────────────────────────────────────────
-
-def _draw_ko_contour(ax, grid, x_vals, y_vals, vmin, vmax):
-    if vmin < 100 < vmax:
-        safe = np.where(np.isnan(grid), vmax, grid)
-        ax.contour(
-            np.arange(len(x_vals)), np.arange(len(y_vals)), safe,
-            levels=[100], colors=[KO_RED], linewidths=2.0, linestyles='--',
-        )
-
-
 # ── optimal marker ────────────────────────────────────────────────────────────
 
 def _draw_optimal(ax, opt_x, opt_y):
@@ -195,21 +184,26 @@ def _draw_titles(fig, ax, atk1, atk2, dfn, mv1, mv2, type1, type2,
                  dark_acc, bg_color, optimal):
     atk_label = atk1 if atk1 == atk2 else f'{atk1} + {atk2}'
 
-    # Main title — no type tag, ASCII arrow
-    title = f'{atk_label}  ->  {dfn}   ({mv1}  +  {mv2})'
-    ax.set_title(title, fontsize=13, fontweight='bold', color=dark_acc, pad=68)
+    # Headline — who's hitting whom
+    ax.set_title(f'{atk_label}  →  {dfn}', fontsize=14, fontweight='bold',
+                 color=dark_acc, pad=66)
 
-    # Desc lines — directly below title, clear gap above the axes
+    # Subtitle — which moves, set apart in italic
+    ax.text(0.5, 1.075, f'{mv1}  +  {mv2}',
+            transform=ax.transAxes, fontsize=9.5, color=dark_acc,
+            alpha=0.75, style='italic', ha='center', va='bottom')
+
+    # Calc-engine description lines, stacked tight under the subtitle
     desc1 = optimal.get('desc1', '')
     desc2 = optimal.get('desc2', '')
-    if desc2:
-        ax.text(0.5, 1.01, desc2,
-                transform=ax.transAxes, fontsize=7.5, color=dark_acc,
-                alpha=0.72, ha='center', va='bottom')
     if desc1:
-        ax.text(0.5, 1.055, desc1,
+        ax.text(0.5, 1.035, desc1,
                 transform=ax.transAxes, fontsize=7.5, color=dark_acc,
-                alpha=0.72, ha='center', va='bottom')
+                alpha=0.6, ha='center', va='bottom')
+    if desc2:
+        ax.text(0.5, 1.0, desc2,
+                transform=ax.transAxes, fontsize=7.5, color=dark_acc,
+                alpha=0.6, ha='center', va='bottom')
 
 
 # ── tick helper ───────────────────────────────────────────────────────────────
@@ -246,7 +240,6 @@ def _plot_two_stat(
     fig, ax, im, vmin, vmax = _make_fig(bg_color, cmap, grid)
     cbar = fig.colorbar(im, ax=ax, pad=0.02)
     _style_axes(ax, cbar, dark_acc, bg_color, vmin, vmax)
-    _draw_ko_contour(ax, grid, x_vals, y_vals, vmin, vmax)
 
     opt_x = x_idx.get(optimal[f'{def_stat}_SP'])
     opt_y = y_idx.get(optimal['HP_SP'])
@@ -275,7 +268,6 @@ def _plot_three_stat(
     fig, ax, im, vmin, vmax = _make_fig(bg_color, cmap, grid)
     cbar = fig.colorbar(im, ax=ax, pad=0.02)
     _style_axes(ax, cbar, dark_acc, bg_color, vmin, vmax)
-    _draw_ko_contour(ax, grid, x_vals, y_vals, vmin, vmax)
 
     opt_x = x_idx.get(optimal[f'{stat_a}_SP'])
     opt_y = y_idx.get(optimal[f'{stat_b}_SP'])
@@ -286,10 +278,6 @@ def _plot_three_stat(
                xlabel=f'{stat_a.upper()} SP  (move 1: {mv1})',
                ylabel=f'{stat_b.upper()} SP  (move 2: {mv2})',
                dark_acc=dark_acc)
-
-    ax.text(0.99, 0.01, f'HP SP = budget − {stat_a.upper()} SP − {stat_b.upper()} SP',
-            transform=ax.transAxes, fontsize=7, color=dark_acc,
-            alpha=0.55, ha='right', va='bottom')
 
     _draw_info_box(ax, optimal, stat_a, stat_b, dark_acc, bg_color)
     _draw_titles(fig, ax, atk1, atk2, dfn, mv1, mv2, type1, type2,
