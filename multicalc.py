@@ -5,6 +5,7 @@
 
 import subprocess
 import json
+from heatmap import plot_heatmap
 
 BRIDGE = './bridge.js'
 
@@ -44,9 +45,9 @@ TERRAINS = {
 
 def prompt_attacker(label: str) -> dict:
     print(f"\n── Attacker {label} ──")
-    name    = input(f'  Name:             ')
-    nature  = input(f'  Nature:           ')
-    item    = input(f'  Item (or blank):  ') or None
+    name    = input(f'  Name:               ')
+    nature  = input(f'  Nature:             ')
+    item    = input(f'  Item (or blank):    ') or None
     ability = input(f'  Ability (or blank): ') or None
     sp      = eval(input(f'  SPs (e.g. {{"atk": 32}}): '))
     return {'name': name, 'nature': nature, 'item': item, 'ability': ability, 'sp': sp}
@@ -103,7 +104,7 @@ def optimise_two(
     # Move 1
     attacker1:   dict,
     move1:       dict,
-    def_stat1:   str,   # 'def' or 'spd'
+    def_stat1:   str,
     def_boost1:  int,
     field1:      dict,
     # Move 2
@@ -115,19 +116,20 @@ def optimise_two(
     # Budget
     existing_hp:   int,
     existing_def1: int,
-    existing_def2: int,  # ignored / same as existing_def1 when def_stat1 == def_stat2
+    existing_def2: int,
     budget:        int,
 ):
-    same_stat = (def_stat1 == def_stat2)
-
+    same_stat   = (def_stat1 == def_stat2)
     optimal     = None
     minimum_sum = float('inf')
     all_results = []
+    move_type1  = ''
+    move_type2  = ''
 
-    # ── two-stat search (both moves hit the same defensive stat) ──────────────
+    # ── two-stat search ───────────────────────────────────────────────────────
     if same_stat:
-        def_stat = def_stat1
-        existing_def = existing_def1  # def2 is the same stat
+        def_stat     = def_stat1
+        existing_def = existing_def1
 
         print(f"\nBoth moves hit {def_stat.upper()} — two-stat search (HP / {def_stat.upper()}).\n")
 
@@ -140,26 +142,27 @@ def optimise_two(
             if HP_SP > 32 or DEF_SP > 32:
                 continue
 
-            defender = {
+            defender_base = {
                 'name':    defender_name,
                 'nature':  defender_nature,
                 'item':    defender_item,
                 'ability': defender_ability,
                 'sp':      {'hp': HP_SP, def_stat: DEF_SP},
-                'boosts':  {def_stat: max(def_boost1, def_boost2)},  # same stat, use the active boost
             }
 
-            r1 = calc_damage(attacker1, {**defender, 'boosts': {def_stat: def_boost1}}, move1, field1)
-            r2 = calc_damage(attacker2, {**defender, 'boosts': {def_stat: def_boost2}}, move2, field2)
+            r1 = calc_damage(attacker1, {**defender_base, 'boosts': {def_stat: def_boost1}}, move1, field1)
+            r2 = calc_damage(attacker2, {**defender_base, 'boosts': {def_stat: def_boost2}}, move2, field2)
 
-            HP     = calc_hp(r1['defenderBaseHp'], HP_SP)
-            dmg1   = r1['max']
-            dmg2   = r2['max']
-            total  = (dmg1 + dmg2) / HP
+            if not move_type1:
+                move_type1 = r1.get('moveType', '')
+                move_type2 = r2.get('moveType', '')
 
-            pct1   = dmg1 / HP * 100
-            pct2   = dmg2 / HP * 100
-            pct_sum = total * 100
+            HP    = calc_hp(r1['defenderBaseHp'], HP_SP)
+            dmg1  = r1['max']
+            dmg2  = r2['max']
+            total = (dmg1 + dmg2) / HP
+            pct1  = dmg1 / HP * 100
+            pct2  = dmg2 / HP * 100
 
             row = {
                 'HP_SP': HP_SP, f'{def_stat}_SP': DEF_SP,
@@ -172,7 +175,7 @@ def optimise_two(
 
             print(f"+{delta_hp:>2} HP / +{delta_def:>2} {def_stat.upper()}  "
                   f"(totals {HP_SP}/{DEF_SP})  "
-                  f"move1={pct1:.1f}%  move2={pct2:.1f}%  sum={pct_sum:.2f}%")
+                  f"move1={pct1:.1f}%  move2={pct2:.1f}%  sum={total*100:.2f}%")
 
             if total < minimum_sum:
                 minimum_sum = total
@@ -180,10 +183,10 @@ def optimise_two(
 
         _print_result_two_stat(optimal, minimum_sum, def_stat)
 
-    # ── three-stat search (moves hit different defensive stats) ───────────────
+    # ── three-stat search ─────────────────────────────────────────────────────
     else:
-        stat_a = def_stat1   # e.g. 'def'
-        stat_b = def_stat2   # e.g. 'spd'
+        stat_a = def_stat1
+        stat_b = def_stat2
 
         print(f"\nMoves hit different stats ({stat_a.upper()} and {stat_b.upper()}) "
               f"— three-stat search (HP / {stat_a.upper()} / {stat_b.upper()}).\n")
@@ -201,27 +204,27 @@ def optimise_two(
                 if HP_SP > 32 or A_SP > 32 or B_SP > 32:
                     continue
 
-                sp_dict = {'hp': HP_SP, stat_a: A_SP, stat_b: B_SP}
-
                 defender_base = {
                     'name':    defender_name,
                     'nature':  defender_nature,
                     'item':    defender_item,
                     'ability': defender_ability,
-                    'sp':      sp_dict,
+                    'sp':      {'hp': HP_SP, stat_a: A_SP, stat_b: B_SP},
                 }
 
                 r1 = calc_damage(attacker1, {**defender_base, 'boosts': {stat_a: def_boost1}}, move1, field1)
                 r2 = calc_damage(attacker2, {**defender_base, 'boosts': {stat_b: def_boost2}}, move2, field2)
 
+                if not move_type1:
+                    move_type1 = r1.get('moveType', '')
+                    move_type2 = r2.get('moveType', '')
+
                 HP    = calc_hp(r1['defenderBaseHp'], HP_SP)
                 dmg1  = r1['max']
                 dmg2  = r2['max']
                 total = (dmg1 + dmg2) / HP
-
-                pct1    = dmg1 / HP * 100
-                pct2    = dmg2 / HP * 100
-                pct_sum = total * 100
+                pct1  = dmg1 / HP * 100
+                pct2  = dmg2 / HP * 100
 
                 row = {
                     'HP_SP': HP_SP, f'{stat_a}_SP': A_SP, f'{stat_b}_SP': B_SP,
@@ -234,13 +237,29 @@ def optimise_two(
 
                 print(f"+{delta_hp:>2} HP / +{delta_a:>2} {stat_a.upper()} / +{delta_b:>2} {stat_b.upper()}  "
                       f"(totals {HP_SP}/{A_SP}/{B_SP})  "
-                      f"move1={pct1:.1f}%  move2={pct2:.1f}%  sum={pct_sum:.2f}%")
+                      f"move1={pct1:.1f}%  move2={pct2:.1f}%  sum={total*100:.2f}%")
 
                 if total < minimum_sum:
                     minimum_sum = total
                     optimal = row
 
         _print_result_three_stat(optimal, minimum_sum, stat_a, stat_b)
+
+    # ── plot ──────────────────────────────────────────────────────────────────
+    if optimal:
+        plot_heatmap(
+            results        = all_results,
+            def_stat1      = def_stat1,
+            def_stat2      = def_stat2,
+            move_type1     = move_type1,
+            move_type2     = move_type2,
+            attacker1_name = attacker1['name'],
+            attacker2_name = attacker2['name'],
+            defender_name  = defender_name,
+            move1_name     = move1['name'],
+            move2_name     = move2['name'],
+            optimal        = optimal,
+        )
 
     return minimum_sum
 
@@ -260,7 +279,8 @@ def _print_result_two_stat(opt: dict, minimum_sum: float, def_stat: str):
     print(f"              {opt['desc1']}")
     print(f"  Move 2:     {opt['dmg2']} / {opt['HP']} HP  ({opt['pct2']:.1f}%)")
     print(f"              {opt['desc2']}")
-    print(f"  Combined:   {opt['dmg1'] + opt['dmg2']} total dmg / {opt['HP']} HP  ({minimum_sum * 100:.1f}% sum, {(1 - minimum_sum) * 100:.1f}% remaining after both)")
+    print(f"  Combined:   {opt['dmg1'] + opt['dmg2']} / {opt['HP']} HP  "
+          f"({minimum_sum * 100:.1f}% sum, {(1 - minimum_sum) * 100:.1f}% remaining after both)")
     print("─" * 60)
 
 
@@ -279,7 +299,8 @@ def _print_result_three_stat(opt: dict, minimum_sum: float, stat_a: str, stat_b:
     print(f"              {opt['desc1']}")
     print(f"  Move 2:     {opt['dmg2']} / {opt['HP']} HP  ({opt['pct2']:.1f}%)")
     print(f"              {opt['desc2']}")
-    print(f"  Combined:   {opt['dmg1'] + opt['dmg2']} total dmg / {opt['HP']} HP  ({minimum_sum * 100:.1f}% sum, {(1 - minimum_sum) * 100:.1f}% remaining after both)")
+    print(f"  Combined:   {opt['dmg1'] + opt['dmg2']} / {opt['HP']} HP  "
+          f"({minimum_sum * 100:.1f}% sum, {(1 - minimum_sum) * 100:.1f}% remaining after both)")
     print("─" * 60)
 
 
@@ -289,37 +310,30 @@ print("═" * 60)
 print("  Dual-Attack Defensive Optimiser")
 print("═" * 60)
 
-# Defender (shared)
 print("\n── Defender ──")
 defender_name    = input('  Name:               ')
 defender_nature  = input('  Nature:             ')
 defender_ability = input('  Ability (or blank): ') or None
 defender_item    = input('  Item (or blank):    ') or None
 
-# Attacker + move 1
 attacker1 = prompt_attacker('1')
 move1, atk_stat1, atk_boost1, def_stat1, def_boost1 = prompt_move('1', attacker1)
 field1 = prompt_field('1')
 
-# Attacker + move 2
 same_attacker = input('\nSame attacker for move 2? (y/n): ').strip().lower() == 'y'
-if same_attacker:
-    attacker2 = dict(attacker1)  # shallow copy; boosts get overwritten per move anyway
-else:
-    attacker2 = prompt_attacker('2')
+attacker2 = dict(attacker1) if same_attacker else prompt_attacker('2')
 
 move2, atk_stat2, atk_boost2, def_stat2, def_boost2 = prompt_move('2', attacker2)
 
 same_field = input('\nSame field conditions for move 2? (y/n): ').strip().lower() == 'y'
 field2 = field1 if same_field else prompt_field('2')
 
-# Budget
 print("\n── SP Budget ──")
-existing_hp   = int(input('  SPs already in HP (0 if none):              ') or 0)
-existing_def1 = int(input(f'  SPs already in {def_stat1.upper()} (0 if none):            ') or 0)
+existing_hp   = int(input('  SPs already in HP (0 if none):   ') or 0)
+existing_def1 = int(input(f'  SPs already in {def_stat1.upper()} (0 if none): ') or 0)
 
 if def_stat1 != def_stat2:
-    existing_def2 = int(input(f'  SPs already in {def_stat2.upper()} (0 if none):            ') or 0)
+    existing_def2 = int(input(f'  SPs already in {def_stat2.upper()} (0 if none): ') or 0)
 else:
     existing_def2 = existing_def1
 
