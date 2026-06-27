@@ -329,7 +329,7 @@ same_field = input('\nSame field conditions for move 2? (y/n): ').strip().lower(
 field2 = field1 if same_field else prompt_field('2')
 
 print("\n── SP Budget ──")
-existing_hp   = int(input('  SPs already in HP (0 if none):   ') or 0)
+existing_hp   = int(input('  SPs already in HP (0 if none):  ') or 0)
 existing_def1 = int(input(f'  SPs already in {def_stat1.upper()} (0 if none): ') or 0)
 
 if def_stat1 != def_stat2:
