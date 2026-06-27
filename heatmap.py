@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
+from scipy.ndimage import zoom
 
 # ── type palette ──────────────────────────────────────────────────────────────
 
@@ -127,11 +128,26 @@ def _style_axes(ax, cbar, dark_acc, bg_color, vmin, vmax):
     plt.setp(cbar.ax.yaxis.get_ticklabels(), color=dark_acc)
     cbar.outline.set_edgecolor(dark_acc)
 
-    if vmin < 100 < vmax:
-        frac = (100 - vmin) / (vmax - vmin)
-        cbar.ax.axhline(frac, color=KO_RED, linewidth=1.5, linestyle='--')
-        cbar.ax.text(1.1, frac, 'KO', transform=cbar.ax.transAxes,
-                     color=KO_RED, va='center', fontsize=8, fontweight='bold')
+
+# ── KO contour ────────────────────────────────────────────────────────────────
+
+def _draw_ko_contour(ax, grid, x_vals, y_vals, vmin, vmax):
+    """Draws the 100%-combined-damage boundary: spreads on the near side
+    survive both hits, spreads on the far side don't. Smoothed by
+    upsampling the grid (bilinear) before contouring, so the line matches
+    the smooth shading instead of tracing the raw, blocky per-SP cells."""
+    if not (vmin < 100 < vmax):
+        return
+
+    filled = np.where(np.isnan(grid), vmax, grid)
+    smooth = zoom(filled, 8, order=1)
+    xs = np.linspace(0, len(x_vals) - 1, smooth.shape[1])
+    ys = np.linspace(0, len(y_vals) - 1, smooth.shape[0])
+
+    ax.contour(
+        xs, ys, smooth,
+        levels=[100], colors=[KO_RED], linewidths=1.1, linestyles='-',
+    )
 
 
 # ── optimal marker ────────────────────────────────────────────────────────────
@@ -184,24 +200,19 @@ def _draw_titles(fig, ax, atk1, atk2, dfn, mv1, mv2, type1, type2,
                  dark_acc, bg_color, optimal):
     atk_label = atk1 if atk1 == atk2 else f'{atk1} + {atk2}'
 
-    # Headline — who's hitting whom
-    ax.set_title(f'{atk_label}  →  {dfn}', fontsize=14, fontweight='bold',
-                 color=dark_acc, pad=66)
+    # Single headline: matchup + moves together
+    ax.set_title(f'{atk_label}  →  {dfn}   ({mv1} + {mv2})',
+                 fontsize=14, fontweight='bold', color=dark_acc, pad=44)
 
-    # Subtitle — which moves, set apart in italic
-    ax.text(0.5, 1.075, f'{mv1}  +  {mv2}',
-            transform=ax.transAxes, fontsize=9.5, color=dark_acc,
-            alpha=0.75, style='italic', ha='center', va='bottom')
-
-    # Calc-engine description lines, stacked tight under the subtitle
+    # Calc-engine description lines, tucked tight under the title
     desc1 = optimal.get('desc1', '')
     desc2 = optimal.get('desc2', '')
-    if desc1:
-        ax.text(0.5, 1.035, desc1,
-                transform=ax.transAxes, fontsize=7.5, color=dark_acc,
-                alpha=0.6, ha='center', va='bottom')
     if desc2:
         ax.text(0.5, 1.0, desc2,
+                transform=ax.transAxes, fontsize=7.5, color=dark_acc,
+                alpha=0.6, ha='center', va='bottom')
+    if desc1:
+        ax.text(0.5, 1.035, desc1,
                 transform=ax.transAxes, fontsize=7.5, color=dark_acc,
                 alpha=0.6, ha='center', va='bottom')
 
@@ -217,6 +228,8 @@ def _set_ticks(ax, x_vals, y_vals, xlabel, ylabel, dark_acc):
     ax.set_yticklabels([y_vals[i] for i in range(0, len(y_vals), step_y)])
     ax.set_xlabel(xlabel, color=dark_acc, fontsize=10)
     ax.set_ylabel(ylabel, color=dark_acc, fontsize=10)
+    ax.set_axisbelow(False)
+    ax.grid(True, color=dark_acc, alpha=0.15, linewidth=0.6)
 
 
 # ── save ──────────────────────────────────────────────────────────────────────
@@ -240,6 +253,7 @@ def _plot_two_stat(
     fig, ax, im, vmin, vmax = _make_fig(bg_color, cmap, grid)
     cbar = fig.colorbar(im, ax=ax, pad=0.02)
     _style_axes(ax, cbar, dark_acc, bg_color, vmin, vmax)
+    _draw_ko_contour(ax, grid, x_vals, y_vals, vmin, vmax)
 
     opt_x = x_idx.get(optimal[f'{def_stat}_SP'])
     opt_y = y_idx.get(optimal['HP_SP'])
@@ -268,6 +282,7 @@ def _plot_three_stat(
     fig, ax, im, vmin, vmax = _make_fig(bg_color, cmap, grid)
     cbar = fig.colorbar(im, ax=ax, pad=0.02)
     _style_axes(ax, cbar, dark_acc, bg_color, vmin, vmax)
+    _draw_ko_contour(ax, grid, x_vals, y_vals, vmin, vmax)
 
     opt_x = x_idx.get(optimal[f'{stat_a}_SP'])
     opt_y = y_idx.get(optimal[f'{stat_b}_SP'])
