@@ -8,6 +8,7 @@ import config
 from plot import plot
 
 BRIDGE = "./bridge.js"
+OUTPUTS_FILE = "outputs.txt"
 
 # One persistent Node process for the whole run.
 _node = subprocess.Popen(
@@ -97,63 +98,64 @@ def optimise(
     minimum_dealt = float("inf")
     best_index = None
 
-    for delta_def in range(0, min(BUDGET, 64) + 1):
-        delta_hp = min(BUDGET, 64) - delta_def
+    with open(OUTPUTS_FILE, "w") as sweep_log:
+        for delta_def in range(0, min(BUDGET, 64) + 1):
+            delta_hp = min(BUDGET, 64) - delta_def
 
-        HP_SP = EXISTING_HP + delta_hp
-        DEF_SP = EXISTING_DEF + delta_def
+            HP_SP = EXISTING_HP + delta_hp
+            DEF_SP = EXISTING_DEF + delta_def
 
-        if HP_SP > 32 or DEF_SP > 32:
-            continue
+            if HP_SP > 32 or DEF_SP > 32:
+                continue
 
-        defender = {
-            "name": DEFENDER_NAME,
-            "nature": DEFENDER_NATURE,
-            "item": DEFENDER_ITEM,
-            "ability": DEFENDER_ABILITY,
-            "sp": {"hp": HP_SP, DEF_STAT: DEF_SP},
-            "boosts": {DEF_STAT: DEFENDER_BOOST},
-        }
-
-        result = calc_damage(ATTACKER, defender, MOVE, FIELD)
-        if not xs:  # capture move type on first call
-            move_type = result.get("moveType", "")
-        HP = calc_hp(result["defenderBaseHp"], HP_SP)
-        DMG = result["max"]
-        damage_dealt = DMG / HP
-
-        xs.append((HP_SP, DEF_SP))
-        ys.append(damage_dealt)
-        all_results.append(
-            {
-                "HP_SP": HP_SP,
-                f"{DEF_STAT}_SP": DEF_SP,
-                "delta_hp": delta_hp,
-                f"delta_{DEF_STAT}": delta_def,
-                "damage_dealt": damage_dealt,
-                "DMG": DMG,
-                "HP": HP,
-                "desc": result["desc"],
+            defender = {
+                "name": DEFENDER_NAME,
+                "nature": DEFENDER_NATURE,
+                "item": DEFENDER_ITEM,
+                "ability": DEFENDER_ABILITY,
+                "sp": {"hp": HP_SP, DEF_STAT: DEF_SP},
+                "boosts": {DEF_STAT: DEFENDER_BOOST},
             }
-        )
 
-        print(
-            f"+{delta_hp:>2} HP / +{delta_def:>2} {DEF_STAT.upper()}  "
-            f"(totals {HP_SP}/{DEF_SP}) -> {damage_dealt * 100:.2f}%  [{result['desc']}]"
-        )
+            result = calc_damage(ATTACKER, defender, MOVE, FIELD)
+            if not xs:  # capture move type on first call
+                move_type = result.get("moveType", "")
+            HP = calc_hp(result["defenderBaseHp"], HP_SP)
+            DMG = result["max"]
+            damage_dealt = DMG / HP
 
-        if damage_dealt < minimum_dealt:
-            minimum_dealt = damage_dealt
-            best_index = len(xs) - 1
-            optimal_stats = {
-                "HP_SP": HP_SP,
-                "DEF_SP": DEF_SP,
-                "delta_hp": delta_hp,
-                "delta_def": delta_def,
-                "DMG": DMG,
-                "HP": HP,
-                "desc": result["desc"],
-            }
+            xs.append((HP_SP, DEF_SP))
+            ys.append(damage_dealt)
+            all_results.append(
+                {
+                    "HP_SP": HP_SP,
+                    f"{DEF_STAT}_SP": DEF_SP,
+                    "delta_hp": delta_hp,
+                    f"delta_{DEF_STAT}": delta_def,
+                    "damage_dealt": damage_dealt,
+                    "DMG": DMG,
+                    "HP": HP,
+                    "desc": result["desc"],
+                }
+            )
+
+            sweep_log.write(
+                f"+{delta_hp:>2} HP / +{delta_def:>2} {DEF_STAT.upper()}  "
+                f"(totals {HP_SP}/{DEF_SP}) -> {damage_dealt * 100:.2f}%  [{result['desc']}]\n"
+            )
+
+            if damage_dealt < minimum_dealt:
+                minimum_dealt = damage_dealt
+                best_index = len(xs) - 1
+                optimal_stats = {
+                    "HP_SP": HP_SP,
+                    "DEF_SP": DEF_SP,
+                    "delta_hp": delta_hp,
+                    "delta_def": delta_def,
+                    "DMG": DMG,
+                    "HP": HP,
+                    "desc": result["desc"],
+                }
 
     if not optimal_stats:
         print(
@@ -215,6 +217,8 @@ def optimise(
             print(f"  Sacrifice:      +{sacrifice:.2f}% vs optimal")
             print(f"  Desc:           {tuned['desc']}")
 
+    print("─" * 60)
+    print(f"  Full sweep log: {OUTPUTS_FILE}")
     print("─" * 60)
 
     plot(
