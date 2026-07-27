@@ -15,3 +15,4 @@ outputs/
 # Local-only docs & settings (not shipped)
 .claude/
 future-feats.md
+codeReview.md
