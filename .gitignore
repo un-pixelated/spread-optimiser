@@ -1,10 +1,18 @@
-__pycache__
-node_modules/
-outputs/
-pycalc/
-*.zip
+# OS
 .DS_Store
+
+# Node
+node_modules/
+
+# Python
+__pycache__
+config.py
+
+# Generated output
+outputs/
+*.zip
+
+# Local-only docs & settings (not shipped)
+.claude/
 CLAUDE.md
 future-feats.md
-.claude/
-config.py
