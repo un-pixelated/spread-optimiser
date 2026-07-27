@@ -2,7 +2,13 @@
 # Ignores config.BUDGET/config.TUNER — finds the smallest total SP spend
 # (across HP + DEFENSIVE_STAT) where the max damage roll doesn't KO.
 
-from core.shared import calc_damage, calc_hp, parse_config, resolve_defender_natures
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from core.shared import calc_damage, calc_hp
+
+from calc import parse_config, resolve_defender_natures
 
 
 def find_min_sp(
