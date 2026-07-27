@@ -6,3 +6,4 @@ pycalc/
 .DS_Store
 CLAUDE.md
 future-feats.md
+.claude/
