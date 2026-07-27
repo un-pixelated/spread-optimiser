@@ -5,11 +5,17 @@ import subprocess
 import json
 import math
 import contextlib
+from pathlib import Path
 import config
 from plot import plot
 
-BRIDGE = "./bridge.js"
-OUTPUTS_FILE = "outputs.txt"
+ROOT_DIR = Path(__file__).resolve().parent.parent
+BRIDGE = str(ROOT_DIR / "bridge.js")
+
+OUTPUTS_DIR = ROOT_DIR / "outputs"
+OUTPUTS_DIR.mkdir(exist_ok=True)
+OUTPUTS_FILE = OUTPUTS_DIR / "outputs.txt"
+PLOT_FILE = OUTPUTS_DIR / "plot.png"
 
 # One persistent Node process for the whole run.
 _node = subprocess.Popen(
@@ -247,13 +253,14 @@ def optimise(
 
     if PRIMARY:
         print()
-        print(f"Sweep log: {OUTPUTS_FILE}")
+        print(f"Sweep log: {OUTPUTS_FILE.relative_to(ROOT_DIR)}")
 
     if PRIMARY:
         plot(
             xs,
             ys,
             DEF_STAT,
+            output_path=PLOT_FILE,
             attacker_name=ATTACKER["name"],
             defender_name=DEFENDER_NAME,
             move_name=MOVE["name"],
@@ -263,6 +270,7 @@ def optimise(
             best_hp=optimal_stats["HP"],
             best_desc=optimal_stats["desc"],
         )
+        print(f"Plot saved to: {PLOT_FILE.relative_to(ROOT_DIR)}")
     return minimum_dealt
 
 

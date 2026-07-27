@@ -53,6 +53,7 @@ def plot(
     ys: list[float],
     def_stat: str = "def",
     *,
+    output_path: str = "plot.png",
     attacker_name: str = "",
     defender_name: str = "",
     move_name: str = "",
@@ -169,5 +170,5 @@ def plot(
         ax.tick_params(axis="x", rotation=90)
 
         fig.tight_layout()
-        fig.savefig("plot", dpi=150, facecolor=bg_color)
+        fig.savefig(output_path, dpi=150, facecolor=bg_color)
         plt.close(fig)

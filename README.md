@@ -16,13 +16,13 @@ pip install matplotlib
 
 ## Running
 
-Edit `config.py` with your attacker, defender, move, and field details, then run:
+Edit `calc/config.py` with your attacker, defender, move, and field details, then run:
 
 ```bash
-python3 calc.py
+python3 calc/calc.py
 ```
 
-`config.py` holds, in order:
+`calc/config.py` holds, in order:
 
 1. **Attacker** — name, nature, item, ability (or `None`), SPs as a dict, e.g. `{"atk": 32}`.
 2. **Attacking stat this move uses** (`ATTACKING_STAT`) — `"atk"` or `"spa"`, plus the attacker's stage boost (`ATTACKER_BOOST`, -6 to +6) on that stat — e.g. a Swords Dance boost.
@@ -39,8 +39,9 @@ python3 calc.py
 
 ## Output
 
-- **Console**: every additional-SP split tried, then the optimal one (lowest % HP dealt), showing exactly how much _more_ HP/DEF(or SPD) you need on top of what's already invested.
-- **plot.png**: % HP dealt across every spread tried, saved in the project folder.
+- **Console**: the optimal spread (lowest % HP dealt), showing exactly how much _more_ HP/DEF(or SPD) you need on top of what's already invested.
+- **outputs/outputs.txt**: every additional-SP split tried.
+- **outputs/plot.png**: % HP dealt across every spread tried.
 
 ## Example
 

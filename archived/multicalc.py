@@ -5,8 +5,9 @@
 
 import subprocess
 import json
+from pathlib import Path
 
-BRIDGE = "./bridge.js"
+BRIDGE = str(Path(__file__).resolve().parent.parent / "bridge.js")
 
 _node = subprocess.Popen(
     ["node", BRIDGE],

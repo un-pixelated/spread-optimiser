@@ -1,7 +1,6 @@
 __pycache__
 node_modules/
-*.png
-outputs.txt
+outputs/
 pycalc/
 *.zip
 .DS_Store
