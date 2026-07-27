@@ -28,6 +28,7 @@ rl.on("line", (line) => {
     nature: attacker.nature ?? "Hardy",
     item: attacker.item,
     ability: attacker.ability,
+    status: attacker.status,
     evs: Object.fromEntries(
       Object.entries(attacker.sp ?? {}).map(([k, v]) => [k, v * 8]),
     ),
@@ -39,6 +40,7 @@ rl.on("line", (line) => {
     nature: defender.nature ?? "Hardy",
     item: defender.item,
     ability: defender.ability,
+    status: defender.status,
     evs: Object.fromEntries(
       Object.entries(defender.sp ?? {}).map(([k, v]) => [k, v * 8]),
     ),
