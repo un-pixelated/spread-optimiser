@@ -4,3 +4,4 @@ node_modules/
 pycalc/
 *.zip
 .DS_Store
+CLAUDE.md
