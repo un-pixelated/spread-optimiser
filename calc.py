@@ -4,6 +4,7 @@
 import subprocess
 import json
 import math
+import contextlib
 import config
 from plot import plot
 
@@ -42,6 +43,20 @@ def calc_hp(base: int, sp: int) -> int:
 
 def clamp_boost(n: int) -> int:
     return max(-6, min(6, n))
+
+
+VALID_NATURES = {
+    "Adamant", "Bashful", "Bold", "Brave", "Calm", "Careful", "Docile",
+    "Gentle", "Hardy", "Hasty", "Impish", "Jolly", "Lax", "Lonely", "Mild",
+    "Modest", "Naive", "Naughty", "Quiet", "Quirky", "Rash", "Relaxed",
+    "Sassy", "Serious", "Timid",
+}
+
+# Natures that boost the stat a move actually hits. Any nature in this table is
+# equally "optimal" for this calculator: it only ever computes a single hit
+# against DEF or SPD, so whichever stat each nature lowers (Atk/SpA/Speed/the
+# other defensive stat) never factors into the damage math.
+BEST_DEFENSIVE_NATURE = {"def": "Bold", "spd": "Calm"}
 
 
 # ── tuner ────────────────────────────────────────────────
@@ -88,6 +103,7 @@ def optimise(
     TUNER: (
         dict | None
     ) = None,  # {'priority': 'hp'|DEF_STAT, 'tolerance': float} or None
+    PRIMARY: bool = True,  # writes outputs.txt / plot.png; False for comparison-only runs
 ) -> float:
     xs = []
     ys = []
@@ -98,7 +114,8 @@ def optimise(
     minimum_dealt = float("inf")
     best_index = None
 
-    with open(OUTPUTS_FILE, "w") as sweep_log:
+    log_ctx = open(OUTPUTS_FILE, "w") if PRIMARY else contextlib.nullcontext()
+    with log_ctx as sweep_log:
         for delta_def in range(0, min(BUDGET, 64) + 1):
             delta_hp = min(BUDGET, 64) - delta_def
 
@@ -139,10 +156,11 @@ def optimise(
                 }
             )
 
-            sweep_log.write(
-                f"+{delta_hp:>2} HP / +{delta_def:>2} {DEF_STAT.upper()}  "
-                f"(totals {HP_SP}/{DEF_SP}) -> {damage_dealt * 100:.2f}%  [{result['desc']}]\n"
-            )
+            if PRIMARY:
+                sweep_log.write(
+                    f"+{delta_hp:>2} HP / +{delta_def:>2} {DEF_STAT.upper()}  "
+                    f"(totals {HP_SP}/{DEF_SP}) -> {damage_dealt * 100:.2f}%  [{result['desc']}]\n"
+                )
 
             if damage_dealt < minimum_dealt:
                 minimum_dealt = damage_dealt
@@ -217,23 +235,25 @@ def optimise(
             print(f"  Sacrifice:      +{sacrifice:.2f}% vs optimal")
             print(f"  Desc:           {tuned['desc']}")
 
-    print("─" * 60)
-    print(f"  Full sweep log: {OUTPUTS_FILE}")
+    if PRIMARY:
+        print("─" * 60)
+        print(f"  Full sweep log: {OUTPUTS_FILE}")
     print("─" * 60)
 
-    plot(
-        xs,
-        ys,
-        DEF_STAT,
-        attacker_name=ATTACKER["name"],
-        defender_name=DEFENDER_NAME,
-        move_name=MOVE["name"],
-        move_type=move_type,
-        best_index=best_index,
-        best_dmg=optimal_stats["DMG"],
-        best_hp=optimal_stats["HP"],
-        best_desc=optimal_stats["desc"],
-    )
+    if PRIMARY:
+        plot(
+            xs,
+            ys,
+            DEF_STAT,
+            attacker_name=ATTACKER["name"],
+            defender_name=DEFENDER_NAME,
+            move_name=MOVE["name"],
+            move_type=move_type,
+            best_index=best_index,
+            best_dmg=optimal_stats["DMG"],
+            best_hp=optimal_stats["HP"],
+            best_desc=optimal_stats["desc"],
+        )
     return minimum_dealt
 
 
@@ -253,6 +273,13 @@ assert config.TERRAIN in (
     "Misty",
     "Psychic",
 ), "config.TERRAIN must be one of None, 'Electric', 'Grassy', 'Misty', 'Psychic'"
+assert (
+    config.ATTACKER_NATURE in VALID_NATURES
+), f"config.ATTACKER_NATURE {config.ATTACKER_NATURE!r} is not a real nature"
+assert config.DEFENDER_NATURE is None or config.DEFENDER_NATURE in VALID_NATURES, (
+    f"config.DEFENDER_NATURE {config.DEFENDER_NATURE!r} is not a real nature "
+    "(use the Python value None, not the string \"None\", to auto-select one)"
+)
 
 attacker = {
     "name": config.ATTACKER_NAME,
@@ -264,7 +291,6 @@ attacker = {
 }
 
 defender_name = config.DEFENDER_NAME
-defender_nature = config.DEFENDER_NATURE
 defender_ability = config.DEFENDER_ABILITY
 defender_item = config.DEFENDER_ITEM
 
@@ -290,18 +316,44 @@ field = {
     "isFriendGuard": config.IS_FRIEND_GUARD,
 }
 
-optimise(
-    attacker,
-    defender_name,
-    defender_nature,
-    defender_ability,
-    defender_item,
-    defensive_stat,
-    defender_boost,
-    existing_hp,
-    existing_def,
-    budget,
-    move,
-    field,
-    TUNER=config.TUNER,
-)
+if config.DEFENDER_NATURE is None:
+    auto_nature = BEST_DEFENSIVE_NATURE[defensive_stat]
+    for nature, label, primary in [
+        (auto_nature, "auto-selected optimal nature", True),
+        ("Serious", "neutral fallback, for comparison", False),
+    ]:
+        print("═" * 60)
+        print(f"  Defender nature: {nature}  ({label})")
+        print("═" * 60)
+        optimise(
+            attacker,
+            defender_name,
+            nature,
+            defender_ability,
+            defender_item,
+            defensive_stat,
+            defender_boost,
+            existing_hp,
+            existing_def,
+            budget,
+            move,
+            field,
+            TUNER=config.TUNER,
+            PRIMARY=primary,
+        )
+else:
+    optimise(
+        attacker,
+        defender_name,
+        config.DEFENDER_NATURE,
+        defender_ability,
+        defender_item,
+        defensive_stat,
+        defender_boost,
+        existing_hp,
+        existing_def,
+        budget,
+        move,
+        field,
+        TUNER=config.TUNER,
+    )
