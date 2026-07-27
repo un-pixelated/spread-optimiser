@@ -1,26 +1,11 @@
 # config.py — edit these values, then run `python3 calc/calc.py`.
 
-ATTACKER_NAME = "Sneasler"
-ATTACKER_NATURE = "Adamant"
-ATTACKER_ITEM = "White Herb"  # or None
-ATTACKER_ABILITY = None
-ATTACKER_STATUS = None  # "slp", "psn", "brn", "frz", "par", "tox", or None
-ATTACKER_SP = {"atk": 32}  # e.g. {"atk": 32}
-
-ATTACKING_STAT = "atk"  # "atk" or "spa" — which stat the move uses
-ATTACKER_BOOST = (
-    0  # attacker's stage boost (-6 to +6) on ATTACKING_STAT, e.g. Swords Dance
-)
-
 DEFENDER_NAME = "Arceus"
 DEFENDER_NATURE = "Adamant"  # or None to auto-pick a nature that boosts DEFENSIVE_STAT
 # (also runs and prints a second pass with the neutral "Serious" nature for comparison)
 DEFENDER_ITEM = "Life Orb"
 DEFENDER_ABILITY = "Multitype"
 DEFENDER_STATUS = None  # "slp", "psn", "brn", "frz", "par", "tox", or None
-
-MOVE_NAME = "Close Combat"
-MOVE_IS_CRIT = False
 
 # Physical moves usually hit "def", special moves usually hit "spd" — but a few
 # break that rule (Psyshock, Psystrike, Secret Sword hit "def" despite being
@@ -36,6 +21,21 @@ EXISTING_DEF_SP = 0  # SPs the defender already has invested in DEFENSIVE_STAT
 BUDGET = (
     32  # additional SP budget to spend across HP + DEFENSIVE_STAT (each capped at 32)
 )
+
+ATTACKER_NAME = "Sneasler"
+ATTACKER_NATURE = "Adamant"
+ATTACKER_ITEM = "White Herb"  # or None
+ATTACKER_ABILITY = None
+ATTACKER_STATUS = None  # "slp", "psn", "brn", "frz", "par", "tox", or None
+ATTACKER_SP = {"atk": 32}  # e.g. {"atk": 32}
+
+ATTACKING_STAT = "atk"  # "atk" or "spa" — which stat the move uses
+ATTACKER_BOOST = (
+    0  # attacker's stage boost (-6 to +6) on ATTACKING_STAT, e.g. Swords Dance
+)
+
+MOVE_NAME = "Close Combat"
+MOVE_IS_CRIT = False
 
 # Terrain works the same whether it came from a move or an ability — e.g. set
 # ATTACKER_ABILITY to "Hadron Engine" and TERRAIN to "Electric" and its Special
