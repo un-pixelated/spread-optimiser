@@ -14,5 +14,4 @@ outputs/
 
 # Local-only docs & settings (not shipped)
 .claude/
-CLAUDE.md
 future-feats.md
