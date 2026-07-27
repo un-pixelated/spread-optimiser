@@ -1,7 +1,7 @@
 # config.py — edit these values, then run `python3 calc/calc.py`.
 
 ATTACKER_NAME = "Sneasler"
-ATTACKER_NATURE = "Jolly"
+ATTACKER_NATURE = "Adamant"
 ATTACKER_ITEM = "White Herb"  # or None
 ATTACKER_ABILITY = None
 ATTACKER_STATUS = None  # "slp", "psn", "brn", "frz", "par", "tox", or None
@@ -12,14 +12,14 @@ ATTACKER_BOOST = (
     0  # attacker's stage boost (-6 to +6) on ATTACKING_STAT, e.g. Swords Dance
 )
 
-DEFENDER_NAME = "Floette-Mega"
-DEFENDER_NATURE = None  # or None to auto-pick a nature that boosts DEFENSIVE_STAT
+DEFENDER_NAME = "Arceus"
+DEFENDER_NATURE = "Adamant"  # or None to auto-pick a nature that boosts DEFENSIVE_STAT
 # (also runs and prints a second pass with the neutral "Serious" nature for comparison)
-DEFENDER_ITEM = None
-DEFENDER_ABILITY = "Fairy Aura"
+DEFENDER_ITEM = "Life Orb"
+DEFENDER_ABILITY = "Multitype"
 DEFENDER_STATUS = None  # "slp", "psn", "brn", "frz", "par", "tox", or None
 
-MOVE_NAME = "Poison Jab"
+MOVE_NAME = "Close Combat"
 MOVE_IS_CRIT = False
 
 # Physical moves usually hit "def", special moves usually hit "spd" — but a few
@@ -34,7 +34,7 @@ DEFENDER_BOOST = (
 EXISTING_HP_SP = 0  # SPs the defender already has invested in HP
 EXISTING_DEF_SP = 0  # SPs the defender already has invested in DEFENSIVE_STAT
 BUDGET = (
-    26  # additional SP budget to spend across HP + DEFENSIVE_STAT (each capped at 32)
+    32  # additional SP budget to spend across HP + DEFENSIVE_STAT (each capped at 32)
 )
 
 # Terrain works the same whether it came from a move or an ability — e.g. set

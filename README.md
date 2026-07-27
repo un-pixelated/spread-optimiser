@@ -16,6 +16,12 @@ pip install matplotlib
 
 ## Running
 
+First time only — `calc/config.py` is gitignored (it holds your personal test values, not something to commit), so create your working copy from the tracked template:
+
+```bash
+cp calc/config.example.py calc/config.py
+```
+
 Edit `calc/config.py` with your attacker, defender, move, and field details, then run:
 
 ```bash

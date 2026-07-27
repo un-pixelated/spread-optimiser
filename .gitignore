@@ -7,3 +7,4 @@ pycalc/
 CLAUDE.md
 future-feats.md
 .claude/
+config.py
