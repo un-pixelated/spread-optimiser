@@ -80,6 +80,10 @@ def optimise(
     minimum_dealt = float("inf")
     best_index = None
 
+    # Only 2 stats tracked here (HP + DEF_STAT), each capped at 32 below, so
+    # the combined total can never exceed 64 -- already under Champions' real
+    # 66-total-SP cap. No separate total check needed (see calc/multi/calc.py
+    # for where that stops being true, with 3 tracked stats).
     log_ctx = open(OUTPUTS_FILE, "w") if PRIMARY else contextlib.nullcontext()
     with log_ctx as sweep_log:
         for delta_def in range(0, min(BUDGET, 64) + 1):
@@ -269,6 +273,17 @@ def parse_config() -> dict:
         f"config.DEFENDER_STATUS {config.DEFENDER_STATUS!r} is not a valid status "
         "(use one of 'slp', 'psn', 'brn', 'frz', 'par', 'tox', or None)"
     )
+    # Champions caps SP at 32 per stat (checked upfront so a bad config value
+    # fails clearly here rather than just silently filtering out every point
+    # in the sweep below). The 66-total-across-all-stats cap never needs a
+    # separate check here: this tool only ever tracks 2 stats at once
+    # (HP + DEFENSIVE_STAT), and 2 x 32 = 64 is already under 66.
+    assert (
+        config.EXISTING_HP_SP <= 32
+    ), f"config.EXISTING_HP_SP {config.EXISTING_HP_SP!r} exceeds the 32-per-stat cap"
+    assert (
+        config.EXISTING_DEF_SP <= 32
+    ), f"config.EXISTING_DEF_SP {config.EXISTING_DEF_SP!r} exceeds the 32-per-stat cap"
 
     attacker = {
         "name": config.ATTACKER_NAME,

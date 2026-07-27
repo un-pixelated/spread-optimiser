@@ -25,6 +25,9 @@ def find_min_sp(
     move,
     field,
 ) -> dict | None:
+    # Only 2 stats tracked here (HP + DEFENSIVE_STAT), each capped at 32
+    # below, so the combined total can never exceed 64 -- already under
+    # Champions' real 66-total-SP cap. No separate total check needed.
     for total in range(0, 65):
         survivors = []
         for delta_def in range(0, total + 1):
