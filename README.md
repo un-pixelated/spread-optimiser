@@ -16,25 +16,26 @@ pip install matplotlib
 
 ## Running
 
+Edit `config.py` with your attacker, defender, move, and field details, then run:
+
 ```bash
 python3 calc.py
 ```
 
-You'll be prompted for, in order:
+`config.py` holds, in order:
 
-1. **Attacker** — name, nature, item, ability (or blank), SPs as a Python dict, e.g. `{"atk": 32}`.
-2. **Defender** — name, nature, item, ability (or blank). Base HP is pulled automatically from species data.
-3. **Move** — name, whether it's a crit.
-4. **Attacking stat this move uses** — `atk` or `spa`.
-5. **Attacker's stage boost** on that stat (-6 to +6, 0 if none) — e.g. a Swords Dance boost.
-6. **Defensive stat the move hits** — `def` or `spd`.
+1. **Attacker** — name, nature, item, ability (or `None`), SPs as a dict, e.g. `{"atk": 32}`.
+2. **Attacking stat this move uses** (`ATTACKING_STAT`) — `"atk"` or `"spa"`, plus the attacker's stage boost (`ATTACKER_BOOST`, -6 to +6) on that stat — e.g. a Swords Dance boost.
+3. **Defender** — name, nature, item, ability (or `None`). Base HP is pulled automatically from species data.
+4. **Move** — name, whether it's a crit.
+5. **Defensive stat the move hits** (`DEFENSIVE_STAT`) — `"def"` or `"spd"`.
    - Physical moves usually hit `def`, special moves usually hit `spd`.
-   - A few special moves break that rule (Psyshock, Psystrike, Secret Sword hit `def` instead of `spd`) — just type whichever one actually applies to your move.
-7. **Defender's stage boost** on that stat (-6 to +6, 0 if none) — e.g. an Iron Defense boost.
-8. **SPs already invested** — if the defender already has SPs sunk into HP and/or the relevant defensive stat, enter them here (0 for a fresh spread).
-9. **Additional SP budget** — how many _more_ SPs you have to spend across HP + the defensive stat. Each stat is capped at 32, same as in-game.
-10. **Terrain** — Electric/Grassy/Misty/Psychic, or blank for none. Works the same whether it came from a move or an ability — e.g. enter the attacker's ability as `Hadron Engine` and set terrain to `Electric` and its Special Attack boost is applied automatically.
-11. **Field conditions** — game type, weather, screens, Helping Hand (attacker's side), Friend Guard (defender's side).
+   - A few special moves break that rule (Psyshock, Psystrike, Secret Sword hit `def` instead of `spd`) — just set whichever one actually applies to your move.
+6. **Defender's stage boost** (`DEFENDER_BOOST`, -6 to +6) on that stat — e.g. an Iron Defense boost.
+7. **SPs already invested** (`EXISTING_HP_SP`, `EXISTING_DEF_SP`) — if the defender already has SPs sunk into HP and/or the relevant defensive stat, set them here (0 for a fresh spread).
+8. **Additional SP budget** (`BUDGET`) — how many _more_ SPs you have to spend across HP + the defensive stat. Each stat is capped at 32, same as in-game.
+9. **Terrain** (`TERRAIN`) — `"Electric"`/`"Grassy"`/`"Misty"`/`"Psychic"`, or `None`. Works the same whether it came from a move or an ability — e.g. set the attacker's ability to `"Hadron Engine"` and terrain to `"Electric"` and its Special Attack boost is applied automatically.
+10. **Field conditions** — game type, weather, screens, Helping Hand (attacker's side), Friend Guard (defender's side).
 
 ## Output
 
@@ -45,10 +46,10 @@ You'll be prompted for, in order:
 
 Defender already has 14 SPs in HP and 0 in DEF, and you've got 30 more SPs to spend:
 
-```
-SPs already invested in HP (0 if none): 14
-SPs already invested in DEF (0 if none): 0
-Additional SP budget to spend (HP + DEF): 30
+```python
+EXISTING_HP_SP = 14
+EXISTING_DEF_SP = 0
+BUDGET = 30
 ```
 
 It searches every valid extra HP/DEF split on top of the existing 14, and tells you the smallest additional investment that still survives the hit.
