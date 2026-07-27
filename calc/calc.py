@@ -1,89 +1,20 @@
 # Defensive optimiser for Pokémon Champions
 # Uses @smogon/calc via bridge.js for damage calculation
 
-import subprocess
-import json
-import math
 import contextlib
-from pathlib import Path
-import config
+from core.shared import (
+    ROOT_DIR,
+    calc_damage,
+    calc_hp,
+    parse_config,
+    resolve_defender_natures,
+)
 from plot import plot
-
-ROOT_DIR = Path(__file__).resolve().parent.parent
-BRIDGE = str(ROOT_DIR / "bridge.js")
 
 OUTPUTS_DIR = ROOT_DIR / "outputs"
 OUTPUTS_DIR.mkdir(exist_ok=True)
 OUTPUTS_FILE = OUTPUTS_DIR / "outputs.txt"
 PLOT_FILE = OUTPUTS_DIR / "plot.png"
-
-# One persistent Node process for the whole run.
-_node = subprocess.Popen(
-    ["node", BRIDGE],
-    stdin=subprocess.PIPE,
-    stdout=subprocess.PIPE,
-    text=True,
-)
-
-
-def calc_damage(attacker, defender, move, field) -> dict:
-    payload = (
-        json.dumps(
-            {
-                "attacker": attacker,
-                "defender": defender,
-                "move": move,
-                "field": field,
-            }
-        )
-        + "\n"
-    )
-    _node.stdin.write(payload)
-    _node.stdin.flush()
-    return json.loads(_node.stdout.readline())
-
-
-def calc_hp(base: int, sp: int) -> int:
-    return base + sp + 75
-
-
-def clamp_boost(n: int) -> int:
-    return max(-6, min(6, n))
-
-
-VALID_NATURES = {
-    "Adamant",
-    "Bashful",
-    "Bold",
-    "Brave",
-    "Calm",
-    "Careful",
-    "Docile",
-    "Gentle",
-    "Hardy",
-    "Hasty",
-    "Impish",
-    "Jolly",
-    "Lax",
-    "Lonely",
-    "Mild",
-    "Modest",
-    "Naive",
-    "Naughty",
-    "Quiet",
-    "Quirky",
-    "Rash",
-    "Relaxed",
-    "Sassy",
-    "Serious",
-    "Timid",
-}
-
-# Natures that boost the stat a move actually hits. Any nature in this table is
-# equally "optimal" for this calculator: it only ever computes a single hit
-# against DEF or SPD, so whichever stat each nature lowers (Atk/SpA/Speed/the
-# other defensive stat) never factors into the damage math.
-BEST_DEFENSIVE_NATURE = {"def": "Bold", "spd": "Calm"}
 
 
 # ── tuner ────────────────────────────────────────────────
@@ -122,6 +53,7 @@ def optimise(
     DEFENDER_ITEM: str | None,
     DEF_STAT: str,
     DEFENDER_BOOST: int,
+    DEFENDER_STATUS: str | None,
     EXISTING_HP: int,
     EXISTING_DEF: int,
     BUDGET: int,
@@ -157,6 +89,7 @@ def optimise(
                 "nature": DEFENDER_NATURE,
                 "item": DEFENDER_ITEM,
                 "ability": DEFENDER_ABILITY,
+                "status": DEFENDER_STATUS,
                 "sp": {"hp": HP_SP, DEF_STAT: DEF_SP},
                 "boosts": {DEF_STAT: DEFENDER_BOOST},
             }
@@ -274,101 +207,27 @@ def optimise(
     return minimum_dealt
 
 
-# ── inputs (from config.py) ──────────────────────────────
-assert config.ATTACKING_STAT in (
-    "atk",
-    "spa",
-), "config.ATTACKING_STAT must be 'atk' or 'spa'"
-assert config.DEFENSIVE_STAT in (
-    "def",
-    "spd",
-), "config.DEFENSIVE_STAT must be 'def' or 'spd'"
-assert config.TERRAIN in (
-    None,
-    "Electric",
-    "Grassy",
-    "Misty",
-    "Psychic",
-), "config.TERRAIN must be one of None, 'Electric', 'Grassy', 'Misty', 'Psychic'"
-assert (
-    config.ATTACKER_NATURE in VALID_NATURES
-), f"config.ATTACKER_NATURE {config.ATTACKER_NATURE!r} is not a real nature"
-assert config.DEFENDER_NATURE is None or config.DEFENDER_NATURE in VALID_NATURES, (
-    f"config.DEFENDER_NATURE {config.DEFENDER_NATURE!r} is not a real nature "
-    '(use the Python value None, not the string "None", to auto-select one)'
-)
-
-attacker = {
-    "name": config.ATTACKER_NAME,
-    "nature": config.ATTACKER_NATURE,
-    "item": config.ATTACKER_ITEM,
-    "ability": config.ATTACKER_ABILITY,
-    "sp": config.ATTACKER_SP,
-    "boosts": {config.ATTACKING_STAT: clamp_boost(config.ATTACKER_BOOST)},
-}
-
-defender_name = config.DEFENDER_NAME
-defender_ability = config.DEFENDER_ABILITY
-defender_item = config.DEFENDER_ITEM
-
-move = {
-    "name": config.MOVE_NAME,
-    "isCrit": config.MOVE_IS_CRIT,
-}
-
-defensive_stat = config.DEFENSIVE_STAT
-defender_boost = clamp_boost(config.DEFENDER_BOOST)
-
-existing_hp = config.EXISTING_HP_SP
-existing_def = config.EXISTING_DEF_SP
-budget = config.BUDGET
-
-field = {
-    "gameType": config.GAME_TYPE,
-    "weather": config.WEATHER,
-    "terrain": config.TERRAIN,
-    "isReflect": config.IS_REFLECT,
-    "isLightScreen": config.IS_LIGHT_SCREEN,
-    "isHelpingHand": config.IS_HELPING_HAND,
-    "isFriendGuard": config.IS_FRIEND_GUARD,
-}
-
-if config.DEFENDER_NATURE is None:
-    auto_nature = BEST_DEFENSIVE_NATURE[defensive_stat]
-    for nature, label, primary in [
-        (auto_nature, "auto-selected optimal nature", True),
-        ("Serious", "neutral fallback, for comparison", False),
-    ]:
-        print(f"\nDefender nature: {nature}  ({label})")
+if __name__ == "__main__":
+    parsed = parse_config()
+    for nature, label, primary in resolve_defender_natures(
+        parsed["defender_nature"], parsed["defensive_stat"]
+    ):
+        if label:
+            print(f"\nDefender nature: {nature}  ({label})")
         optimise(
-            attacker,
-            defender_name,
+            parsed["attacker"],
+            parsed["defender_name"],
             nature,
-            defender_ability,
-            defender_item,
-            defensive_stat,
-            defender_boost,
-            existing_hp,
-            existing_def,
-            budget,
-            move,
-            field,
-            TUNER=config.TUNER,
+            parsed["defender_ability"],
+            parsed["defender_item"],
+            parsed["defensive_stat"],
+            parsed["defender_boost"],
+            parsed["defender_status"],
+            parsed["existing_hp"],
+            parsed["existing_def"],
+            parsed["budget"],
+            parsed["move"],
+            parsed["field"],
+            TUNER=parsed["tuner"],
             PRIMARY=primary,
         )
-else:
-    optimise(
-        attacker,
-        defender_name,
-        config.DEFENDER_NATURE,
-        defender_ability,
-        defender_item,
-        defensive_stat,
-        defender_boost,
-        existing_hp,
-        existing_def,
-        budget,
-        move,
-        field,
-        TUNER=config.TUNER,
-    )
