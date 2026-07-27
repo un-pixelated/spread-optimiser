@@ -46,10 +46,31 @@ def clamp_boost(n: int) -> int:
 
 
 VALID_NATURES = {
-    "Adamant", "Bashful", "Bold", "Brave", "Calm", "Careful", "Docile",
-    "Gentle", "Hardy", "Hasty", "Impish", "Jolly", "Lax", "Lonely", "Mild",
-    "Modest", "Naive", "Naughty", "Quiet", "Quirky", "Rash", "Relaxed",
-    "Sassy", "Serious", "Timid",
+    "Adamant",
+    "Bashful",
+    "Bold",
+    "Brave",
+    "Calm",
+    "Careful",
+    "Docile",
+    "Gentle",
+    "Hardy",
+    "Hasty",
+    "Impish",
+    "Jolly",
+    "Lax",
+    "Lonely",
+    "Mild",
+    "Modest",
+    "Naive",
+    "Naughty",
+    "Quiet",
+    "Quirky",
+    "Rash",
+    "Relaxed",
+    "Sassy",
+    "Serious",
+    "Timid",
 }
 
 # Natures that boost the stat a move actually hits. Any nature in this table is
@@ -183,19 +204,16 @@ def optimise(
 
     # ── optimal output ───────────────────────────────────
     print()
-    print("─" * 60)
-    print("  OPTIMAL")
-    print("─" * 60)
+    print("OPTIMAL")
     print(
-        f"  Spread:         {optimal_stats['HP_SP']} HP / {optimal_stats['DEF_SP']} {DEF_STAT.upper()}"
+        f"  Spread:  {optimal_stats['HP_SP']} HP / {optimal_stats['DEF_SP']} {DEF_STAT.upper()}"
+        f"  (+{optimal_stats['delta_hp']} HP / +{optimal_stats['delta_def']} {DEF_STAT.upper()})"
     )
     print(
-        f"  Additional:     +{optimal_stats['delta_hp']} HP / +{optimal_stats['delta_def']} {DEF_STAT.upper()}"
+        f"  Damage:  {optimal_stats['DMG']} / {optimal_stats['HP']} HP"
+        f"  ({minimum_dealt * 100:.1f}% dealt, {(1 - minimum_dealt) * 100:.1f}% remaining)"
     )
-    print(
-        f"  Damage:         {optimal_stats['DMG']} / {optimal_stats['HP']} HP  ({minimum_dealt * 100:.1f}% dealt, {(1 - minimum_dealt) * 100:.1f}% remaining)"
-    )
-    print(f"  Desc:           {optimal_stats['desc']}")
+    print(f"  Desc:    {optimal_stats['desc']}")
 
     # ── tuner output ─────────────────────────────────────
     if TUNER:
@@ -205,40 +223,31 @@ def optimise(
         tuned = tune(all_results, DEF_STAT, priority, tolerance)
 
         print()
-        print("─" * 60)
-        print(
-            f"  TUNED OPTIMAL  (priority: {priority.upper()}, tolerance: +{tolerance}%)"
-        )
-        print("─" * 60)
+        print(f"TUNED  (priority: {priority.upper()}, tolerance: +{tolerance}%)")
 
         if tuned is None or (
             tuned["HP_SP"] == optimal_stats["HP_SP"]
             and tuned[f"{DEF_STAT}_SP"] == optimal_stats["DEF_SP"]
         ):
-            print(
-                "  No different spread found within tolerance — tuned result is identical to optimal."
-            )
+            print("  No different spread found within tolerance — same as optimal.")
         else:
             t_pct = tuned["damage_dealt"] * 100
             opt_pct = minimum_dealt * 100
             sacrifice = t_pct - opt_pct
 
             print(
-                f"  Spread:         {tuned['HP_SP']} HP / {tuned[f'{DEF_STAT}_SP']} {DEF_STAT.upper()}"
+                f"  Spread:  {tuned['HP_SP']} HP / {tuned[f'{DEF_STAT}_SP']} {DEF_STAT.upper()}"
+                f"  (+{tuned['delta_hp']} HP / +{tuned[f'delta_{DEF_STAT}']} {DEF_STAT.upper()})"
             )
             print(
-                f"  Additional:     +{tuned['delta_hp']} HP / +{tuned[f'delta_{DEF_STAT}']} {DEF_STAT.upper()}"
+                f"  Damage:  {tuned['DMG']} / {tuned['HP']} HP"
+                f"  ({t_pct:.1f}% dealt, {100 - t_pct:.1f}% remaining, +{sacrifice:.2f}% vs optimal)"
             )
-            print(
-                f"  Damage:         {tuned['DMG']} / {tuned['HP']} HP  ({t_pct:.1f}% dealt, {100 - t_pct:.1f}% remaining)"
-            )
-            print(f"  Sacrifice:      +{sacrifice:.2f}% vs optimal")
-            print(f"  Desc:           {tuned['desc']}")
+            print(f"  Desc:    {tuned['desc']}")
 
     if PRIMARY:
-        print("─" * 60)
-        print(f"  Full sweep log: {OUTPUTS_FILE}")
-    print("─" * 60)
+        print()
+        print(f"Sweep log: {OUTPUTS_FILE}")
 
     if PRIMARY:
         plot(
@@ -278,7 +287,7 @@ assert (
 ), f"config.ATTACKER_NATURE {config.ATTACKER_NATURE!r} is not a real nature"
 assert config.DEFENDER_NATURE is None or config.DEFENDER_NATURE in VALID_NATURES, (
     f"config.DEFENDER_NATURE {config.DEFENDER_NATURE!r} is not a real nature "
-    "(use the Python value None, not the string \"None\", to auto-select one)"
+    '(use the Python value None, not the string "None", to auto-select one)'
 )
 
 attacker = {
@@ -322,9 +331,7 @@ if config.DEFENDER_NATURE is None:
         (auto_nature, "auto-selected optimal nature", True),
         ("Serious", "neutral fallback, for comparison", False),
     ]:
-        print("═" * 60)
-        print(f"  Defender nature: {nature}  ({label})")
-        print("═" * 60)
+        print(f"\nDefender nature: {nature}  ({label})")
         optimise(
             attacker,
             defender_name,
