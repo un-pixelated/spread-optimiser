@@ -1,9 +1,10 @@
-# config.py — edit these values, then run `python3 calc.py`.
+# config.py — edit these values, then run `python3 calc/calc.py`.
 
 ATTACKER_NAME = "Sneasler"
-ATTACKER_NATURE = "Timid"
+ATTACKER_NATURE = "Jolly"
 ATTACKER_ITEM = "White Herb"  # or None
 ATTACKER_ABILITY = None
+ATTACKER_STATUS = None  # "slp", "psn", "brn", "frz", "par", "tox", or None
 ATTACKER_SP = {"atk": 32}  # e.g. {"atk": 32}
 
 ATTACKING_STAT = "atk"  # "atk" or "spa" — which stat the move uses
@@ -16,6 +17,7 @@ DEFENDER_NATURE = None  # or None to auto-pick a nature that boosts DEFENSIVE_ST
 # (also runs and prints a second pass with the neutral "Serious" nature for comparison)
 DEFENDER_ITEM = None
 DEFENDER_ABILITY = "Fairy Aura"
+DEFENDER_STATUS = None  # "slp", "psn", "brn", "frz", "par", "tox", or None
 
 MOVE_NAME = "Poison Jab"
 MOVE_IS_CRIT = False
@@ -32,7 +34,7 @@ DEFENDER_BOOST = (
 EXISTING_HP_SP = 0  # SPs the defender already has invested in HP
 EXISTING_DEF_SP = 0  # SPs the defender already has invested in DEFENSIVE_STAT
 BUDGET = (
-    40  # additional SP budget to spend across HP + DEFENSIVE_STAT (each capped at 32)
+    26  # additional SP budget to spend across HP + DEFENSIVE_STAT (each capped at 32)
 )
 
 # Terrain works the same whether it came from a move or an ability — e.g. set
@@ -49,5 +51,5 @@ IS_FRIEND_GUARD = False  # active for the defender's side
 # Among all spreads within TOLERANCE percentage points of optimal, pick the one
 # that maximises PRIORITY's SP instead of the outright lowest-damage spread.
 # Set to None to disable.
-TUNER = None  # {"priority": "hp", "tolerance": 1}
+TUNER = None
 # TUNER = {"priority": "hp", "tolerance": 0.5}  # priority: "hp" or DEFENSIVE_STAT
