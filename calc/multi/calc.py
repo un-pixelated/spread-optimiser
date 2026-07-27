@@ -70,6 +70,26 @@ def parse_config_multi() -> dict:
         "Psychic",
     ), "config.TERRAIN must be one of None, 'Electric', 'Grassy', 'Misty', 'Psychic'"
 
+    # Champions caps SP two ways: 32 per stat, 66 total across all stats on
+    # one Pokemon. Checked upfront so a bad config value fails clearly here
+    # instead of just silently filtering out every point in the search below.
+    assert (
+        config.EXISTING_HP_SP <= 32
+    ), f"config.EXISTING_HP_SP {config.EXISTING_HP_SP!r} exceeds the 32-per-stat cap"
+    assert (
+        config.EXISTING_DEF_SP <= 32
+    ), f"config.EXISTING_DEF_SP {config.EXISTING_DEF_SP!r} exceeds the 32-per-stat cap"
+    assert (
+        config.EXISTING_SPD_SP <= 32
+    ), f"config.EXISTING_SPD_SP {config.EXISTING_SPD_SP!r} exceeds the 32-per-stat cap"
+    existing_total = (
+        config.EXISTING_HP_SP + config.EXISTING_DEF_SP + config.EXISTING_SPD_SP
+    )
+    assert existing_total <= 66, (
+        f"config.EXISTING_HP_SP + EXISTING_DEF_SP + EXISTING_SPD_SP = {existing_total} "
+        "exceeds the 66-total-SP cap"
+    )
+
     attackers = []
     for a in config.ATTACKERS:
         attackers.append(
@@ -177,6 +197,9 @@ def optimise_multi(
         return HP, per_attacker, total_dmg
 
     if len(stats_used) == 1:
+        # Only 2 stats tracked here (HP + one defensive stat), each capped at
+        # 32, so the combined total can never exceed 64 -- already under the
+        # game's real 66-total-SP cap. No separate total check needed.
         stat = stats_used[0]
         existing_stat = existing_def if stat == "def" else existing_spd
         cap = min(budget, 64)
@@ -209,7 +232,13 @@ def optimise_multi(
                 best = row
 
     else:
-        cap = min(budget, 64)
+        # Three stats tracked at once (HP + DEF + SPD) — unlike the single-stat
+        # branch above, the per-stat 32 caps alone don't bound the total below
+        # the game's real 66-total-SP cap (3 x 32 = 96 > 66), so it needs its
+        # own explicit check below. The reachable ceiling for delta_hp +
+        # delta_def + delta_spd is also 66 here, not 64 -- capping at 64 would
+        # never even explore the 65/66-total spreads that check permits.
+        cap = min(budget, 66)
 
         for delta_def in range(0, cap + 1):
             for delta_spd in range(0, cap - delta_def + 1):
@@ -219,7 +248,12 @@ def optimise_multi(
                 DEF_SP = existing_def + delta_def
                 SPD_SP = existing_spd + delta_spd
 
-                if HP_SP > 32 or DEF_SP > 32 or SPD_SP > 32:
+                if (
+                    HP_SP > 32
+                    or DEF_SP > 32
+                    or SPD_SP > 32
+                    or HP_SP + DEF_SP + SPD_SP > 66
+                ):
                     continue
 
                 spread = {"hp": HP_SP, "def": DEF_SP, "spd": SPD_SP}
@@ -335,7 +369,9 @@ if __name__ == "__main__":
         result = run(nature)
         if result is None:
             print(
-                "\nNo valid spread found — check your existing SPs / budget don't push any stat past 32."
+                "\nNo valid spread found — check your existing SPs / budget don't "
+                "push any stat past 32, or (with attackers hitting both DEF and "
+                "SPD) the combined HP+DEF+SPD total past 66."
             )
         else:
             report_multi(result, primary=True)
@@ -345,7 +381,9 @@ if __name__ == "__main__":
 
         if not valid:
             print(
-                "\nNo valid spread found — check your existing SPs / budget don't push any stat past 32."
+                "\nNo valid spread found — check your existing SPs / budget don't "
+                "push any stat past 32, or (with attackers hitting both DEF and "
+                "SPD) the combined HP+DEF+SPD total past 66."
             )
         else:
             winner = min(
