@@ -24,9 +24,10 @@ python3 calc/calc.py
 
 `calc/config.py` holds, in order:
 
-1. **Attacker** — name, nature, item, ability (or `None`), SPs as a dict, e.g. `{"atk": 32}`.
+1. **Attacker** — name, nature, item, ability, status condition (all or `None`), SPs as a dict, e.g. `{"atk": 32}`.
 2. **Attacking stat this move uses** (`ATTACKING_STAT`) — `"atk"` or `"spa"`, plus the attacker's stage boost (`ATTACKER_BOOST`, -6 to +6) on that stat — e.g. a Swords Dance boost.
-3. **Defender** — name, nature, item, ability (or `None`). Base HP is pulled automatically from species data.
+3. **Defender** — name, nature, item, ability, status condition (all or `None`). Base HP is pulled automatically from species data.
+   - Status condition (`ATTACKER_STATUS`/`DEFENDER_STATUS`) — `"slp"`, `"psn"`, `"brn"`, `"frz"`, `"par"`, `"tox"`, or `None`. Affects damage where the game mechanics say it should — e.g. burn halves physical damage unless the attacker has Guts.
 4. **Move** — name, whether it's a crit.
 5. **Defensive stat the move hits** (`DEFENSIVE_STAT`) — `"def"` or `"spd"`.
    - Physical moves usually hit `def`, special moves usually hit `spd`.
@@ -42,6 +43,16 @@ python3 calc/calc.py
 - **Console**: the optimal spread (lowest % HP dealt), showing exactly how much _more_ HP/DEF(or SPD) you need on top of what's already invested.
 - **outputs/outputs.txt**: every additional-SP split tried.
 - **outputs/plot.png**: % HP dealt across every spread tried.
+
+## Minimum SP to survive
+
+If you just want to know the smallest SP investment that avoids getting KO'd — rather than the lowest-damage spread within a fixed budget — run:
+
+```bash
+python3 calc/survive.py
+```
+
+It reads the same `calc/config.py` and ignores `BUDGET`/`TUNER` entirely: it searches every valid HP/DEF(or SPD) split, starting from `EXISTING_HP_SP`/`EXISTING_DEF_SP`, and reports the smallest additional total that guarantees survival (the max damage roll doesn't KO). If even a full 32/32 investment can't survive, it says so. Console-only — no `outputs/` files or plot.
 
 ## Example
 
