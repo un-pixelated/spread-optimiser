@@ -96,3 +96,11 @@ python3 calc/multi/calc.py
 3. **Field conditions** — shared across every attacker (weather/terrain/screens are global battle state, not something that changes per incoming attack).
 
 Output is console-only, no plot — a multi-attacker result doesn't reduce to a single 2D chart the way a one-move sweep does. The full sweep still goes to `outputs/outputs.txt`, and running this deletes any stale `outputs/plot.png` left over from a single-attacker run.
+
+For the minimum-SP-to-survive equivalent against multiple attackers at once:
+
+```bash
+python3 calc/multi/survive.py
+```
+
+Reads the same `calc/multi/config.py`, ignores `BUDGET`, and reports the smallest additional total SP that guarantees survival against the *combined* damage of all attackers.
