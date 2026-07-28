@@ -11,7 +11,7 @@ npm install
 Python 3 + matplotlib:
 
 ```bash
-pip install matplotlib
+pip install matplotlib matplotx
 ```
 
 ## Running (single attacker)
@@ -43,6 +43,7 @@ python3 calc/single/calc.py
 7. **Move** — name, whether it's a crit.
 8. **Terrain** (`TERRAIN`) — `"Electric"`/`"Grassy"`/`"Misty"`/`"Psychic"`, or `None`. Works the same whether it came from a move or an ability — e.g. set the attacker's ability to `"Hadron Engine"` and terrain to `"Electric"` and its Special Attack boost is applied automatically.
 9. **Field conditions** — game type, weather, screens, Helping Hand (attacker's side), Friend Guard (defender's side).
+10. **Tuner** (`TUNER`, optional) — `None` to disable, or `{"priority": "hp"|DEFENSIVE_STAT, "tolerance": <percentage points>}` to pick the spread that maximises `priority`'s SP among all spreads within `tolerance` of the outright-optimal one, instead of blindly taking the lowest-damage point.
 
 ## Output
 

@@ -16,7 +16,7 @@ outputs/                                 shared, gitignored — plot.png, output
 calc/
   core/     shared.py                          mode-agnostic engine (bridge, calc_damage/calc_hp, validation sets)
   single/   calc.py, survive.py, config[.example].py, plot.py    single-attack optimiser (active)
-  multi/    calc.py, config[.example].py                          2-4 attacker optimiser (active)
+  multi/    calc.py, survive.py, config[.example].py              2-4 attacker optimiser (active)
 ```
 
 `calc/single/config.py` and `calc/multi/config.py` are both gitignored — they hold personal test values (attacker/defender picks, budget) that change on every run, not something to commit. Their `config.example.py` siblings are the tracked templates (schema + field comments; a fresh checkout needs `cp calc/single/config.example.py calc/single/config.py` and the same for `multi/` once, before either `calc.py` will import successfully). When you touch config fields (add/rename/document one), update both files in that folder — `config.example.py` is what ships, `config.py` is the user's own. The two `config.py` modules never clash despite sharing a filename: each is invoked as its own process with its own `sys.path[0]` (the script's own directory), so `import config` inside `single/calc.py` resolves to `single/config.py`, and inside `multi/calc.py` resolves to `multi/config.py`.
@@ -33,6 +33,7 @@ black calc/single/*.py calc/multi/*.py calc/core/*.py  # formats all Python file
 python3 calc/single/calc.py     # single-move optimiser, reads calc/single/config.py -> writes outputs/plot.png, outputs/outputs.txt
 python3 calc/single/survive.py  # minimum-SP-to-survive finder, reads calc/single/config.py, console-only
 python3 calc/multi/calc.py      # 2-4 attacker optimiser, reads calc/multi/config.py, console-only (no plot)
+python3 calc/multi/survive.py   # minimum-SP-to-survive finder for 2-4 attackers, reads calc/multi/config.py, console-only
 ```
 
 There is no test suite or build step in this repo.
@@ -74,6 +75,8 @@ This also affects the `cap` each branch iterates up to. Every branch spends its 
 `DEFENDER_NATURE = None` auto-pick tries exactly `NATURE_CANDIDATES = ["Bold", "Calm", "Serious"]` and picks whichever produces the lowest combined damage — **not** a lookup table like `single/`'s `BEST_DEFENSIVE_NATURE`, because with attackers hitting both `def` and `spd` there's no single nature that's provably best without actually computing it. Lax/Gentle are deliberately excluded from the candidate set: since the defender never attacks in this calculator, a nature's "cost" side only matters when it falls on the *other* defensive stat (Lax costs SpD, Gentle costs Def) — it's invisible when it falls on Atk/SpA/Speed (Bold/Calm's cost). That means Lax can only ever tie Bold (when SpD isn't being attacked) or lose to it (when it is) — never win — and symmetrically for Gentle vs. Calm. Ties among the three candidates break toward `NATURE_CANDIDATES`'s order (Bold, then Calm, then Serious).
 
 No plot — deletes any stale `outputs/plot.png` from a prior `single/calc.py` run (`PLOT_FILE.unlink(missing_ok=True)`, first thing `__main__` does) rather than leaving it around looking current. Full sweep still goes to `outputs/outputs.txt`, same convention as `single/calc.py`.
+
+**`calc/multi/survive.py`** — `single/survive.py`'s diagonal search generalized to 2-4 summed attackers, importing `parse_config_multi`, `NATURE_CANDIDATES`, `_hit`, and `_spread_label` from sibling `calc.py` rather than duplicating them (same relationship `single/survive.py` has with `single/calc.py`). `find_min_sp_multi()` branches on `stats_used` exactly like `optimise_multi()`: 1 distinct stat → diagonals up to total 64; 2 distinct stats → diagonals up to total **66, not 64** (the same ceiling correction `optimise_multi()`'s 3-stat branch needed, since 3 tracked stats bump into the 66-total cap before `3×32=96` would). At each diagonal, sums every attacker's damage via `_hit()` and checks `combined_dmg < HP` (strict), stopping at the first diagonal with a survivor, tie-broken toward maximizing `HP_SP`. `DEFENDER_NATURE = None` auto-pick reuses `NATURE_CANDIDATES` but compares candidates by **lowest total SP needed**, not lowest damage — a different objective from `multi/calc.py`'s nature auto-pick, so that comparison can't be reused directly. Ignores `config.BUDGET` entirely (no `TUNER` in multi mode to ignore). Console-only, no `outputs/` writes, no plot — same convention as `single/survive.py`.
 
 `archived/multicalc.py` no longer exists — it's been fully superseded by `calc/multi/calc.py` (generalized to 2-4 attackers, properly maintained). Git history has it if needed.
 
