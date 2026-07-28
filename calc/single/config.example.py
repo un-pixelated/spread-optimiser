@@ -1,4 +1,4 @@
-# config.py — edit these values, then run `python3 calc/calc.py`.
+# config.py — edit these values, then run `python3 calc/single/calc.py`.
 
 DEFENDER_NAME = "Arceus"
 DEFENDER_NATURE = "Adamant"  # or None to auto-pick a nature that boosts DEFENSIVE_STAT
