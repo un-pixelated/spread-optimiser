@@ -37,6 +37,10 @@ python3 calc/multi/calc.py      # 2-4 attacker optimiser, reads calc/multi/confi
 
 There is no test suite or build step in this repo.
 
+## Commit conventions
+
+Subject lines are prefixed with a bracketed tag matching the change's nature — `[feat]`, `[fix]`, `[docs]`, `[chore]`, `[nit]` (see git log for precedent). Apply this to every commit in this repo, not just ones that touch code.
+
 ## Architecture
 
 **`bridge.js`** — a persistent Node process, not a one-shot script. It reads newline-delimited JSON requests from stdin (`{attacker, defender, move, field}`) and writes one JSON response per line to stdout, using `@smogon/calc`'s `Generations.get(9)`. Level is hardcoded to 50. Each entry-point script spawns its own instance once (`subprocess.Popen`) and keeps it alive for the whole run rather than re-spawning per calculation — this is what makes the brute-force sweeps fast.
