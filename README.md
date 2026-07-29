@@ -8,12 +8,6 @@ Finds the HP / DEF (or HP / SPD) split that minimises the % of a defender's HP a
 npm install
 ```
 
-Python 3 + matplotlib:
-
-```bash
-pip install matplotlib matplotx
-```
-
 ## Running (single attacker)
 
 First time only — `calc/single/config.py` is gitignored (it holds your personal test values, not something to commit), so create your working copy from the tracked template:
@@ -49,7 +43,6 @@ python3 calc/single/calc.py
 
 - **Console**: the optimal spread (lowest % HP dealt), showing exactly how much _more_ HP/DEF(or SPD) you need on top of what's already invested.
 - **outputs/outputs.txt**: every additional-SP split tried.
-- **outputs/plot.png**: % HP dealt across every spread tried.
 
 ## Minimum SP to survive
 
@@ -59,7 +52,7 @@ If you just want to know the smallest SP investment that avoids getting KO'd —
 python3 calc/single/survive.py
 ```
 
-It reads the same `calc/single/config.py` and ignores `BUDGET`/`TUNER` entirely: it searches every valid HP/DEF(or SPD) split, starting from `EXISTING_HP_SP`/`EXISTING_DEF_SP`, and reports the smallest additional total that guarantees survival (the max damage roll doesn't KO). If even a full 32/32 investment can't survive, it says so. Console-only — no `outputs/` files or plot.
+It reads the same `calc/single/config.py` and ignores `BUDGET`/`TUNER` entirely: it searches every valid HP/DEF(or SPD) split, starting from `EXISTING_HP_SP`/`EXISTING_DEF_SP`, and reports the smallest additional total that guarantees survival (the max damage roll doesn't KO). If even a full 32/32 investment can't survive, it says so. Console-only — no `outputs/` files.
 
 ## Example
 
@@ -96,7 +89,7 @@ python3 calc/multi/calc.py
 2. **`ATTACKERS`** — a list of **2 to 4** attacker+move dicts, each specifying that attacker's name/nature/item/ability/status/SPs, which stat its move uses (`attacking_stat`) and hits (`defensive_stat`), its boost, and the move itself. **To add an attacker** (up to 4), copy one of the dicts in the list and append it. **To remove one** (down to a minimum of 2), delete its dict. Attackers can freely mix physical (`def`-hitting) and special (`spd`-hitting) moves — even at the minimum of 2 attackers, one hitting `def` and the other `spd` is the normal case, not an edge case. There are only two possible defensive stats in the game no matter how many attackers you configure, so the search never grows past HP + DEF + SPD.
 3. **Field conditions** — shared across every attacker (weather/terrain/screens are global battle state, not something that changes per incoming attack).
 
-Output is console-only, no plot — a multi-attacker result doesn't reduce to a single 2D chart the way a one-move sweep does. The full sweep still goes to `outputs/outputs.txt`, and running this deletes any stale `outputs/plot.png` left over from a single-attacker run.
+Output is console-only. The full sweep still goes to `outputs/outputs.txt`.
 
 For the minimum-SP-to-survive equivalent against multiple attackers at once:
 

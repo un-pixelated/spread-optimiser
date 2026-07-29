@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-A Pokémon Champions defensive stat-point (SP) optimiser. Given an attacker/move and a defender, it brute-forces every valid HP/DEF (or HP/SPD) SP split within a budget and reports the split that minimises the % of the defender's HP the attack deals. Damage calculation is delegated to the `@smogon/calc` npm package (gen 9) via a small persistent Node bridge process; the optimisation loop, CLI, and plotting are all Python.
+A Pokémon Champions defensive stat-point (SP) optimiser. Given an attacker/move and a defender, it brute-forces every valid HP/DEF (or HP/SPD) SP split within a budget and reports the split that minimises the % of the defender's HP the attack deals. Damage calculation is delegated to the `@smogon/calc` npm package (gen 9) via a small persistent Node bridge process; the optimisation loop and CLI are all Python.
 
 See README.md for the full config field reference and example usage.
 
@@ -12,11 +12,11 @@ See README.md for the full config field reference and example usage.
 
 ```
 bridge.js, package.json, node_modules/   shared Node damage-calc bridge (repo root)
-outputs/                                 shared, gitignored — plot.png, outputs.txt
+outputs/                                 shared, gitignored — outputs.txt
 calc/
   core/     shared.py                          mode-agnostic engine (bridge, calc_damage/calc_hp, validation sets)
-  single/   calc.py, survive.py, config[.example].py, plot.py    single-attack optimiser (active)
-  multi/    calc.py, survive.py, config[.example].py              2-4 attacker optimiser (active)
+  single/   calc.py, survive.py, config[.example].py    single-attack optimiser (active)
+  multi/    calc.py, survive.py, config[.example].py    2-4 attacker optimiser (active)
 ```
 
 `calc/single/config.py` and `calc/multi/config.py` are both gitignored — they hold personal test values (attacker/defender picks, budget) that change on every run, not something to commit. Their `config.example.py` siblings are the tracked templates (schema + field comments; a fresh checkout needs `cp calc/single/config.example.py calc/single/config.py` and the same for `multi/` once, before either `calc.py` will import successfully). When you touch config fields (add/rename/document one), update both files in that folder — `config.example.py` is what ships, `config.py` is the user's own. The two `config.py` modules never clash despite sharing a filename: each is invoked as its own process with its own `sys.path[0]` (the script's own directory), so `import config` inside `single/calc.py` resolves to `single/config.py`, and inside `multi/calc.py` resolves to `multi/config.py`.
@@ -27,12 +27,11 @@ calc/
 
 ```bash
 npm install                                            # installs @smogon/calc (used by bridge.js)
-pip install matplotlib matplotx                        # matplotlib + matplotx for calc/single/plot.py
 black calc/single/*.py calc/multi/*.py calc/core/*.py  # formats all Python files (project convention, run before committing)
 
-python3 calc/single/calc.py     # single-move optimiser, reads calc/single/config.py -> writes outputs/plot.png, outputs/outputs.txt
+python3 calc/single/calc.py     # single-move optimiser, reads calc/single/config.py -> writes outputs/outputs.txt
 python3 calc/single/survive.py  # minimum-SP-to-survive finder, reads calc/single/config.py, console-only
-python3 calc/multi/calc.py      # 2-4 attacker optimiser, reads calc/multi/config.py, console-only (no plot)
+python3 calc/multi/calc.py      # 2-4 attacker optimiser, reads calc/multi/config.py, console-only
 python3 calc/multi/survive.py   # minimum-SP-to-survive finder for 2-4 attackers, reads calc/multi/config.py, console-only
 ```
 
@@ -52,15 +51,13 @@ Subject lines are prefixed with a bracketed tag matching the change's nature —
 
 **`calc/single/calc.py`** — single-attack optimiser. Defines `tune()`/`optimise()` (its search engine), plus `parse_config()` and `resolve_defender_natures()` (moved in from `core/shared.py` when `multi/` was added, since they're single-mode-specific), plus the `if __name__ == "__main__":` driver — guarded so `survive.py` can `from calc import parse_config, resolve_defender_natures` without triggering calc.py's own CLI run. Sweeps every `(delta_hp, delta_def)` pair that fits the SP budget (capped at 32/stat), calls the bridge once per point, and tracks the split with the lowest `damage / HP` ratio. `HP = base_hp + SP + 75` (`calc_hp`), a Pokémon Champions-specific formula distinct from mainline games. Has an optional "tuner" mode (`tune()`, enabled via `config.TUNER`): among all splits within a tolerance (percentage points) of optimal, pick the one that maximises a prioritised stat's SP instead of blindly taking the lowest-damage point.
 
-If `config.DEFENDER_NATURE` is `None`, `calc.py` runs the sweep twice — once with a nature auto-picked to boost `DEFENSIVE_STAT` (`BEST_DEFENSIVE_NATURE`: Bold for def, Calm for spd), once with the neutral `Serious` nature — and prints both, labeled, for comparison. Only the auto-selected (primary) run writes `outputs/outputs.txt` and `outputs/plot.png`; the comparison run is console-only (`optimise()`'s `PRIMARY` flag controls this).
+If `config.DEFENDER_NATURE` is `None`, `calc.py` runs the sweep twice — once with a nature auto-picked to boost `DEFENSIVE_STAT` (`BEST_DEFENSIVE_NATURE`: Bold for def, Calm for spd), once with the neutral `Serious` nature — and prints both, labeled, for comparison. Only the auto-selected (primary) run writes `outputs/outputs.txt`; the comparison run is console-only (`optimise()`'s `PRIMARY` flag controls this).
 
 Terminal output is intentionally plain — no `═`/`─` box-drawing separators, just labeled lines (`OPTIMAL`, `TUNED`, blank-line spacing). Keep it that way; don't reintroduce ASCII dividers. This applies to `multi/calc.py` too.
 
 To change a run, edit `calc/single/config.py` and re-run `calc/single/calc.py` — don't add CLI args or prompts back in.
 
-**`calc/single/survive.py`** — minimum-SP-to-survive finder, sharing `core.shared` for the bridge/`calc_damage`/`calc_hp`, and importing `parse_config`/`resolve_defender_natures` from its sibling `calc.py`. Ignores `config.BUDGET`/`config.TUNER` entirely — instead of a fixed-budget sweep, `find_min_sp()` walks increasing total-SP diagonals (same diagonal shape `optimise()` uses: `delta_def` in `range(0, total+1)`, `delta_hp = total - delta_def`), checking `DMG < HP` (strict — a roll equal to HP is a KO) at each point, and stops at the first diagonal with a survivor (tie-broken toward maximizing `HP_SP`, since HP helps against any threat while the defensive stat only helps this one matchup). Reports "not survivable" if nothing up to 32/32 survives. Console-only by design — no `outputs/` writes, no plot.
-
-**`calc/single/plot.py`** — matplotlib rendering for `calc.py`'s single-attack sweep, color-keyed by the attacking move's Pokémon type (`TYPE_COLORS`/`TYPE_BG_COLORS`). Saves to whatever `output_path` the caller passes (`calc.py` passes `outputs/plot.png`). Not used by `survive.py` or anything in `multi/` — multi-attacker results don't reduce to a single 2D chart.
+**`calc/single/survive.py`** — minimum-SP-to-survive finder, sharing `core.shared` for the bridge/`calc_damage`/`calc_hp`, and importing `parse_config`/`resolve_defender_natures` from its sibling `calc.py`. Ignores `config.BUDGET`/`config.TUNER` entirely — instead of a fixed-budget sweep, `find_min_sp()` walks increasing total-SP diagonals (same diagonal shape `optimise()` uses: `delta_def` in `range(0, total+1)`, `delta_hp = total - delta_def`), checking `DMG < HP` (strict — a roll equal to HP is a KO) at each point, and stops at the first diagonal with a survivor (tie-broken toward maximizing `HP_SP`, since HP helps against any threat while the defensive stat only helps this one matchup). Reports "not survivable" if nothing up to 32/32 survives. Console-only by design — no `outputs/` writes.
 
 **Status conditions** (`ATTACKER_STATUS`/`DEFENDER_STATUS` in either `config.py`, `None` or one of `"slp"`/`"psn"`/`"brn"`/`"frz"`/`"par"`/`"tox"`) pass straight through `bridge.js` into `@smogon/calc`'s `Pokemon` constructor — no extra wiring needed on the JS side (`pokemon.ts`'s `this.status = options.status || ''` already collapses Python `None`/JSON `null` to "no status"). This is what `@smogon/calc`'s gen9 mechanics actually key off of for burn halving physical damage, Guts/Toxic Boost/Flare Boost, Marvel Scale, Facade, Hex, Barb Barrage, and Venoshock — verified by reading `node_modules/@smogon/calc/src/mechanics/gen789.ts` directly, not assumed.
 
@@ -74,9 +71,9 @@ This also affects the `cap` each branch iterates up to. Every branch spends its 
 
 `DEFENDER_NATURE = None` auto-pick tries exactly `NATURE_CANDIDATES = ["Bold", "Calm", "Serious"]` and picks whichever produces the lowest combined damage — **not** a lookup table like `single/`'s `BEST_DEFENSIVE_NATURE`, because with attackers hitting both `def` and `spd` there's no single nature that's provably best without actually computing it. Lax/Gentle are deliberately excluded from the candidate set: since the defender never attacks in this calculator, a nature's "cost" side only matters when it falls on the *other* defensive stat (Lax costs SpD, Gentle costs Def) — it's invisible when it falls on Atk/SpA/Speed (Bold/Calm's cost). That means Lax can only ever tie Bold (when SpD isn't being attacked) or lose to it (when it is) — never win — and symmetrically for Gentle vs. Calm. Ties among the three candidates break toward `NATURE_CANDIDATES`'s order (Bold, then Calm, then Serious).
 
-No plot — deletes any stale `outputs/plot.png` from a prior `single/calc.py` run (`PLOT_FILE.unlink(missing_ok=True)`, first thing `__main__` does) rather than leaving it around looking current. Full sweep still goes to `outputs/outputs.txt`, same convention as `single/calc.py`.
+Full sweep still goes to `outputs/outputs.txt`, same convention as `single/calc.py`.
 
-**`calc/multi/survive.py`** — `single/survive.py`'s diagonal search generalized to 2-4 summed attackers, importing `parse_config_multi`, `NATURE_CANDIDATES`, `_hit`, and `_spread_label` from sibling `calc.py` rather than duplicating them (same relationship `single/survive.py` has with `single/calc.py`). `find_min_sp_multi()` branches on `stats_used` exactly like `optimise_multi()`: 1 distinct stat → diagonals up to total 64; 2 distinct stats → diagonals up to total **66, not 64** (the same ceiling correction `optimise_multi()`'s 3-stat branch needed, since 3 tracked stats bump into the 66-total cap before `3×32=96` would). At each diagonal, sums every attacker's damage via `_hit()` and checks `combined_dmg < HP` (strict), stopping at the first diagonal with a survivor, tie-broken toward maximizing `HP_SP`. `DEFENDER_NATURE = None` auto-pick reuses `NATURE_CANDIDATES` but compares candidates by **lowest total SP needed**, not lowest damage — a different objective from `multi/calc.py`'s nature auto-pick, so that comparison can't be reused directly. Ignores `config.BUDGET` entirely (no `TUNER` in multi mode to ignore). Console-only, no `outputs/` writes, no plot — same convention as `single/survive.py`.
+**`calc/multi/survive.py`** — `single/survive.py`'s diagonal search generalized to 2-4 summed attackers, importing `parse_config_multi`, `NATURE_CANDIDATES`, `_hit`, and `_spread_label` from sibling `calc.py` rather than duplicating them (same relationship `single/survive.py` has with `single/calc.py`). `find_min_sp_multi()` branches on `stats_used` exactly like `optimise_multi()`: 1 distinct stat → diagonals up to total 64; 2 distinct stats → diagonals up to total **66, not 64** (the same ceiling correction `optimise_multi()`'s 3-stat branch needed, since 3 tracked stats bump into the 66-total cap before `3×32=96` would). At each diagonal, sums every attacker's damage via `_hit()` and checks `combined_dmg < HP` (strict), stopping at the first diagonal with a survivor, tie-broken toward maximizing `HP_SP`. `DEFENDER_NATURE = None` auto-pick reuses `NATURE_CANDIDATES` but compares candidates by **lowest total SP needed**, not lowest damage — a different objective from `multi/calc.py`'s nature auto-pick, so that comparison can't be reused directly. Ignores `config.BUDGET` entirely (no `TUNER` in multi mode to ignore). Console-only, no `outputs/` writes — same convention as `single/survive.py`.
 
 `archived/multicalc.py` no longer exists — it's been fully superseded by `calc/multi/calc.py` (generalized to 2-4 attackers, properly maintained). Git history has it if needed.
 

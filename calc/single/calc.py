@@ -16,12 +16,10 @@ from core.shared import (
 )
 
 import config
-from plot import plot
 
 OUTPUTS_DIR = ROOT_DIR / "outputs"
 OUTPUTS_DIR.mkdir(exist_ok=True)
 OUTPUTS_FILE = OUTPUTS_DIR / "outputs.txt"
-PLOT_FILE = OUTPUTS_DIR / "plot.png"
 
 
 # ── tuner ────────────────────────────────────────────────
@@ -69,16 +67,12 @@ def optimise(
     TUNER: (
         dict | None
     ) = None,  # {'priority': 'hp'|DEF_STAT, 'tolerance': float} or None
-    PRIMARY: bool = True,  # writes outputs.txt / plot.png; False for comparison-only runs
+    PRIMARY: bool = True,  # writes outputs.txt; False for comparison-only runs
 ) -> float:
-    xs = []
-    ys = []
-    move_type = ""
     all_results = []
 
     optimal_stats = {}
     minimum_dealt = float("inf")
-    best_index = None
 
     # Only 2 stats tracked here (HP + DEF_STAT), each capped at 32 below, so
     # the combined total can never exceed 64 -- already under Champions' real
@@ -106,14 +100,10 @@ def optimise(
             }
 
             result = calc_damage(ATTACKER, defender, MOVE, FIELD)
-            if not xs:  # capture move type on first call
-                move_type = result.get("moveType", "")
             HP = calc_hp(result["defenderBaseHp"], HP_SP)
             DMG = result["max"]
             damage_dealt = DMG / HP
 
-            xs.append((HP_SP, DEF_SP))
-            ys.append(damage_dealt)
             all_results.append(
                 {
                     "HP_SP": HP_SP,
@@ -135,7 +125,6 @@ def optimise(
 
             if damage_dealt < minimum_dealt:
                 minimum_dealt = damage_dealt
-                best_index = len(xs) - 1
                 optimal_stats = {
                     "HP_SP": HP_SP,
                     "DEF_SP": DEF_SP,
@@ -199,22 +188,6 @@ def optimise(
         print()
         print(f"Sweep log: {OUTPUTS_FILE.relative_to(ROOT_DIR)}")
 
-    if PRIMARY:
-        plot(
-            xs,
-            ys,
-            DEF_STAT,
-            output_path=PLOT_FILE,
-            attacker_name=ATTACKER["name"],
-            defender_name=DEFENDER_NAME,
-            move_name=MOVE["name"],
-            move_type=move_type,
-            best_index=best_index,
-            best_dmg=optimal_stats["DMG"],
-            best_hp=optimal_stats["HP"],
-            best_desc=optimal_stats["desc"],
-        )
-        print(f"Plot saved to: {PLOT_FILE.relative_to(ROOT_DIR)}")
     return minimum_dealt
 
 
@@ -229,7 +202,7 @@ def resolve_defender_natures(defender_nature, defensive_stat):
     """Returns [(nature, label, primary), ...] to run.
 
     If defender_nature is None: auto-selected nature (primary, writes
-    outputs/plot) plus a neutral "Serious" comparison pass. Otherwise: just
+    outputs.txt) plus a neutral "Serious" comparison pass. Otherwise: just
     the explicit nature, unlabeled (no banner printed), matching how this
     project always behaved before nature auto-selection existed.
     """

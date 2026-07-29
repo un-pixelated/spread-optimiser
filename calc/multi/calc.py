@@ -1,7 +1,7 @@
 # Multi-attack defensive optimiser for Pokémon Champions
 # Minimises the summed damage from 2-4 attackers against one shared defender.
-# Uses @smogon/calc via bridge.js for damage calculation. No plot — console
-# output plus a full sweep log at outputs/outputs.txt.
+# Uses @smogon/calc via bridge.js for damage calculation. Console output plus
+# a full sweep log at outputs/outputs.txt.
 
 import sys
 import contextlib
@@ -22,7 +22,6 @@ import config
 OUTPUTS_DIR = ROOT_DIR / "outputs"
 OUTPUTS_DIR.mkdir(exist_ok=True)
 OUTPUTS_FILE = OUTPUTS_DIR / "outputs.txt"
-PLOT_FILE = OUTPUTS_DIR / "plot.png"
 
 # Only these three natures are ever worth trying: the defender never attacks
 # in this calculator, so a nature's "cost" only matters when it falls on the
@@ -344,8 +343,6 @@ def report_multi(result: dict, primary: bool):
 
 
 if __name__ == "__main__":
-    PLOT_FILE.unlink(missing_ok=True)
-
     parsed = parse_config_multi()
 
     def run(nature):
