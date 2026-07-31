@@ -41,7 +41,7 @@ MOVE_IS_CRIT = False
 # ATTACKER_ABILITY to "Hadron Engine" and TERRAIN to "Electric" and its Special
 # Attack boost is applied automatically.
 GAME_TYPE = "Singles"  # "Singles" or "Doubles"
-WEATHER = None
+WEATHER = None  # "Sand", "Sun", "Rain", "Snow", or None
 TERRAIN = None  # "Electric", "Grassy", "Misty", "Psychic", or None
 IS_REFLECT = False
 IS_LIGHT_SCREEN = False
