@@ -219,7 +219,9 @@ def parse_config() -> dict:
     assert config.ATTACKING_STAT in (
         "atk",
         "spa",
-    ), "config.ATTACKING_STAT must be 'atk' or 'spa'"
+        "def",
+        "spd",
+    ), "config.ATTACKING_STAT must be 'atk', 'spa', 'def', or 'spd'"
     assert config.DEFENSIVE_STAT in (
         "def",
         "spd",
