@@ -54,7 +54,8 @@ ATTACKERS = [
 ]
 
 GAME_TYPE = "Singles"  # "Singles" or "Doubles"
-WEATHER = None
+WEATHER = None  # "Sand", "Sun", "Rain", "Hail", "Snow", "Harsh Sunshine",
+# "Heavy Rain", "Strong Winds", or None
 TERRAIN = None  # "Electric", "Grassy", "Misty", "Psychic", or None
 IS_REFLECT = False
 IS_LIGHT_SCREEN = False
