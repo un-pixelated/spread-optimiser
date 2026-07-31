@@ -9,8 +9,7 @@ DEFENDER_STATUS = None  # "slp", "psn", "brn", "frz", "par", "tox", or None
 
 # Physical moves usually hit "def", special moves usually hit "spd" — but a few
 # break that rule (Psyshock, Psystrike, Secret Sword hit "def" despite being
-# special; Body Press uses the attacker's own "def", etc). Set whichever one
-# actually applies to your move.
+# special). Set whichever one actually applies to your move.
 DEFENSIVE_STAT = "def"  # "def" or "spd" — which stat the move hits
 DEFENDER_BOOST = (
     0  # defender's stage boost (-6 to +6) on DEFENSIVE_STAT, e.g. Iron Defense
@@ -29,7 +28,10 @@ ATTACKER_ABILITY = None
 ATTACKER_STATUS = None  # "slp", "psn", "brn", "frz", "par", "tox", or None
 ATTACKER_SP = {"atk": 32}  # e.g. {"atk": 32}
 
-ATTACKING_STAT = "atk"  # "atk" or "spa" — which stat the move uses
+# Body Press deals damage off the attacker's own "def" instead of "atk" —
+# set ATTACKING_STAT to "def" here so ATTACKER_BOOST (e.g. Iron Defense)
+# applies correctly.
+ATTACKING_STAT = "atk"  # "atk", "spa", or "def" — which stat the move uses
 ATTACKER_BOOST = (
     0  # attacker's stage boost (-6 to +6) on ATTACKING_STAT, e.g. Swords Dance
 )
