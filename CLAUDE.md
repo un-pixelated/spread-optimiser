@@ -37,9 +37,14 @@ python3 calc/multi/survive.py   # minimum-SP-to-survive finder for 2-4 attackers
 
 There is no test suite or build step in this repo.
 
-## Commit conventions
+## Commit and PR conventions
 
 Subject lines are prefixed with a bracketed tag matching the change's nature — `[feat]`, `[fix]`, `[docs]`, `[chore]`, `[nit]` (see git log for precedent). Apply this to every commit in this repo, not just ones that touch code.
+
+- **One GitHub issue → one PR → one commit.** Never bundle multiple issues' fixes into a single PR. If a PR needs a follow-up fix before it's merged, amend the existing commit or `git reset --soft <branch-point> && git commit` to re-squash into one — don't stack a second commit. Force-push the feature branch with `--force-with-lease` after amending (safe here: it's your own short-lived, unshared branch — never do this to `main`).
+- **Sync `main` before branching.** Run `git checkout main && git pull --ff-only` immediately before `git checkout -b <new-branch>`. If `--ff-only` fails, stop and investigate — don't fall back to a plain `git pull`, which silently creates a merge commit and pollutes `main`'s history.
+- **Rebase before squashing if the branch might predate a merged PR.** If `git reset --soft main` on a feature branch stages changes to files the branch never touched, the branch forked from a stale `main` — undo (`git reset --hard origin/<branch>`), run `git rebase main` first, then squash.
+- **Confirm the current branch before every commit** (`git status` or `git branch --show-current`) — this repo tends to run several short-lived branches per session, and it's easy to commit onto the wrong one.
 
 ## Architecture
 
