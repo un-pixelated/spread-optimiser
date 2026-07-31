@@ -1,6 +1,6 @@
 # Pokémon Champions Defensive SP Optimiser
 
-Finds the HP / DEF (or HP / SPD) split that minimises the % of a defender's HP a given attack deals, within an SP budget. Uses [@smogon/calc](https://www.npmjs.com/package/@smogon/calc) under the hood via a small Node bridge (`bridge.js`).
+Finds the HP/DEF (or HP/SPD) split that minimises the % HP a given attack deals, within an SP budget. Uses [@smogon/calc](https://www.npmjs.com/package/@smogon/calc) via a small Node bridge (`bridge.js`).
 
 ## Setup
 
@@ -8,93 +8,64 @@ Finds the HP / DEF (or HP / SPD) split that minimises the % of a defender's HP a
 npm install
 ```
 
-## Running (single attacker)
+## Single attacker
 
-First time only — `calc/single/config.py` is gitignored (it holds your personal test values, not something to commit), so create your working copy from the tracked template:
+First time only — `calc/single/config.py` is gitignored (personal values):
 
 ```bash
 cp calc/single/config.example.py calc/single/config.py
 ```
 
-Edit `calc/single/config.py` with your defender, attacker, move, and field details, then run:
+Edit it, then:
 
 ```bash
 python3 calc/single/calc.py
 ```
 
-`calc/single/config.py` holds, in order:
+Config fields, in order:
 
-1. **Defender** — name, nature (or `None` to auto-pick), item, ability, status condition (all or `None`). Base HP is pulled automatically from species data.
-   - Status condition (`DEFENDER_STATUS`, and `ATTACKER_STATUS` below) — `"slp"`, `"psn"`, `"brn"`, `"frz"`, `"par"`, `"tox"`, or `None`. Affects damage where the game mechanics say it should — e.g. burn halves physical damage unless the attacker has Guts.
-2. **Defensive stat the move hits** (`DEFENSIVE_STAT`) — `"def"` or `"spd"`.
-   - Physical moves usually hit `def`, special moves usually hit `spd`.
-   - A few special moves break that rule (Psyshock, Psystrike, Secret Sword hit `def` instead of `spd`) — just set whichever one actually applies to your move.
-   - **Defender's stage boost** (`DEFENDER_BOOST`, -6 to +6) on that stat — e.g. an Iron Defense boost.
-3. **SPs already invested** (`EXISTING_HP_SP`, `EXISTING_DEF_SP`) — if the defender already has SPs sunk into HP and/or the relevant defensive stat, set them here (0 for a fresh spread).
-4. **Additional SP budget** (`BUDGET`) — how many _more_ SPs you have to spend across HP + the defensive stat. Each stat is capped at 32, same as in-game.
-5. **Attacker** — name, nature, item, ability, status condition (all or `None`), SPs as a dict, e.g. `{"atk": 32}`.
-6. **Attacking stat this move uses** (`ATTACKING_STAT`) — `"atk"` or `"spa"`, plus the attacker's stage boost (`ATTACKER_BOOST`, -6 to +6) on that stat — e.g. a Swords Dance boost.
-7. **Move** — name, whether it's a crit.
-8. **Terrain** (`TERRAIN`) — `"Electric"`/`"Grassy"`/`"Misty"`/`"Psychic"`, or `None`. Works the same whether it came from a move or an ability — e.g. set the attacker's ability to `"Hadron Engine"` and terrain to `"Electric"` and its Special Attack boost is applied automatically.
-9. **Field conditions** — game type, weather, screens, Helping Hand (attacker's side), Friend Guard (defender's side).
-10. **Tuner** (`TUNER`, optional) — `None` to disable, or `{"priority": "hp"|DEFENSIVE_STAT, "tolerance": <percentage points>}` to pick the spread that maximises `priority`'s SP among all spreads within `tolerance` of the outright-optimal one, instead of blindly taking the lowest-damage point.
+1. **Defender** — name, nature (`None` to auto-pick), item, ability, status (`"slp"`/`"psn"`/`"brn"`/`"frz"`/`"par"`/`"tox"`/`None`). Base HP is pulled from species data automatically.
+2. **`DEFENSIVE_STAT`** — `"def"` or `"spd"`, whichever the move hits (usually `def` for physical, `spd` for special; exceptions like Psyshock/Psystrike/Secret Sword hit `def`). Plus `DEFENDER_BOOST` (-6 to +6) on that stat.
+3. **`EXISTING_HP_SP` / `EXISTING_DEF_SP`** — SPs the defender already has invested.
+4. **`BUDGET`** — additional SPs to spend across HP + the defensive stat (each capped at 32).
+5. **Attacker** — name, nature, item, ability, status, SPs (e.g. `{"atk": 32}`).
+6. **`ATTACKING_STAT`** — `"atk"`, `"spa"`, or `"def"` (e.g. Body Press). Plus `ATTACKER_BOOST` (-6 to +6) on that stat.
+7. **Move** — name, crit flag.
+8. **`TERRAIN`** — `"Electric"`/`"Grassy"`/`"Misty"`/`"Psychic"`/`None`. Also applies from an ability (e.g. Hadron Engine + Electric terrain).
+9. **Field** — game type, weather, screens, Helping Hand, Friend Guard.
+10. **`TUNER`** (optional) — `None`, or `{"priority": "hp"|DEFENSIVE_STAT, "tolerance": <pp>}` to pick the spread maximising `priority`'s SP among all spreads within `tolerance` of optimal.
 
-## Output
-
-- **Console**: the optimal spread (lowest % HP dealt), showing exactly how much _more_ HP/DEF(or SPD) you need on top of what's already invested.
-- **outputs/outputs.txt**: every additional-SP split tried.
+**Output**: console prints the optimal spread; `outputs/outputs.txt` logs every split tried.
 
 ## Minimum SP to survive
-
-If you just want to know the smallest SP investment that avoids getting KO'd — rather than the lowest-damage spread within a fixed budget — run:
 
 ```bash
 python3 calc/single/survive.py
 ```
 
-It reads the same `calc/single/config.py` and ignores `BUDGET`/`TUNER` entirely: it searches every valid HP/DEF(or SPD) split, starting from `EXISTING_HP_SP`/`EXISTING_DEF_SP`, and reports the smallest additional total that guarantees survival (the max damage roll doesn't KO). If even a full 32/32 investment can't survive, it says so. Console-only — no `outputs/` files.
-
-## Example
-
-Defender already has 14 SPs in HP and 0 in DEF, and you've got 30 more SPs to spend:
-
-```python
-EXISTING_HP_SP = 14
-EXISTING_DEF_SP = 0
-BUDGET = 30
-```
-
-It searches every valid extra HP/DEF split on top of the existing 14, and tells you the smallest additional investment that still survives the hit.
+Same config, ignoring `BUDGET`/`TUNER`. Searches every valid split from the existing SPs up and reports the smallest addition that survives the max damage roll — or says so if even 32/32 can't. Console-only.
 
 ## Multiple attackers
 
-If you're checking a defender against several incoming threats at once (e.g. two different attackers, or one attacker with two different moves) rather than a single hit, use the multi-attacker optimiser instead. It minimises the *combined* damage from all of them, across the same shared SP budget.
-
-First time only:
+For several simultaneous threats (multiple attackers, or one attacker with multiple moves), minimising *combined* damage:
 
 ```bash
 cp calc/multi/config.example.py calc/multi/config.py
-```
-
-Edit `calc/multi/config.py`, then run:
-
-```bash
 python3 calc/multi/calc.py
 ```
 
-`calc/multi/config.py` holds, in order:
+Config fields:
 
-1. **Defender** — name, nature (or `None` to auto-pick the best of Bold/Calm/Serious by actually comparing total damage), item, ability, status condition, existing SPs already invested (`EXISTING_HP_SP`, `EXISTING_DEF_SP`, `EXISTING_SPD_SP`), and the additional SP budget (`BUDGET`) shared across all attackers.
-   - Champions caps SP two ways: 32 per stat, and 66 total across every stat on the Pokémon. If your attackers hit both `def` and `spd`, `EXISTING_HP_SP + EXISTING_DEF_SP + EXISTING_SPD_SP + BUDGET` needs to fit under 66 as well as each stat staying under 32 — the tool validates both and tells you clearly if either is broken.
-2. **`ATTACKERS`** — a list of **2 to 4** attacker+move dicts, each specifying that attacker's name/nature/item/ability/status/SPs, which stat its move uses (`attacking_stat`) and hits (`defensive_stat`), its boost, and the move itself. **To add an attacker** (up to 4), copy one of the dicts in the list and append it. **To remove one** (down to a minimum of 2), delete its dict. Attackers can freely mix physical (`def`-hitting) and special (`spd`-hitting) moves — even at the minimum of 2 attackers, one hitting `def` and the other `spd` is the normal case, not an edge case. There are only two possible defensive stats in the game no matter how many attackers you configure, so the search never grows past HP + DEF + SPD.
-3. **Field conditions** — shared across every attacker (weather/terrain/screens are global battle state, not something that changes per incoming attack).
+1. **Defender** — as above, but nature `None` auto-picks the best of Bold/Calm/Serious by comparing total damage. Existing SPs: `EXISTING_HP_SP`, `EXISTING_DEF_SP`, `EXISTING_SPD_SP`. `BUDGET` is shared across all attackers. Champions caps SP at 32/stat and 66 total — both are validated.
+2. **`ATTACKERS`** — list of 2-4 attacker+move dicts (name/nature/item/ability/status/SPs, `attacking_stat`, `defensive_stat`, boost, move). Copy/append or delete a dict to change the count. Attackers can freely mix `def`- and `spd`-hitting moves.
+3. **Field** — shared across all attackers.
 
-Output is console-only. The full sweep still goes to `outputs/outputs.txt`.
+Console-only; the full sweep also goes to `outputs/outputs.txt`.
 
-For the minimum-SP-to-survive equivalent against multiple attackers at once:
+For minimum SP to survive combined damage:
 
 ```bash
 python3 calc/multi/survive.py
 ```
 
-Reads the same `calc/multi/config.py`, ignores `BUDGET`, and reports the smallest additional total SP that guarantees survival against the *combined* damage of all attackers.
+Same config, ignoring `BUDGET`.
