@@ -1,4 +1,4 @@
-# OS
+# macOS specific
 .DS_Store
 
 # Node
@@ -12,5 +12,22 @@ config.py
 outputs/
 *.zip
 
-# Local-only docs & settings (not shipped)
+# Coding assistants' stuff
+.agents/
+/CLAUDE.md
+/instructions.md
 .claude/
+/GEMINI.md
+.gemini/
+
+# Cursor specific files
+.cursor
+.cursorignore
+.cursorindexingignore
+
+# VS2017 and VSCode config files.
+.vscode
+.vs
+
+#zed config files
+.zed
