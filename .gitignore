@@ -29,5 +29,5 @@ outputs/
 .vscode
 .vs
 
-#zed config files
+# zed config files
 .zed
