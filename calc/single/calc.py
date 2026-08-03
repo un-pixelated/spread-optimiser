@@ -80,6 +80,11 @@ def optimise(
     # for where that stops being true, with 3 tracked stats).
     log_ctx = open(OUTPUTS_FILE, "w") if PRIMARY else contextlib.nullcontext()
     with log_ctx as sweep_log:
+        # The intent of the user in this branch is to use all available SPs
+        # into bulk. Handle the case where they forget to reduce the budget
+        # correclty when adding existing stats input.
+        if EXISTING_HP + EXISTING_DEF + BUDGET > 64:
+            BUDGET = 64 - (EXISTING_HP + EXISTING_DEF)
         for delta_def in range(0, min(BUDGET, 64) + 1):
             delta_hp = min(BUDGET, 64) - delta_def
 
