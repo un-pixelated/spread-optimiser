@@ -2,6 +2,12 @@
 
 Finds the HP/DEF (or HP/SPD) split that minimises the % HP a given attack deals, within an SP budget. Uses [@smogon/calc](https://www.npmjs.com/package/@smogon/calc) via a small Node bridge (`bridge.js`).
 
+> [!WARNING]
+> This is a vibe-coded project. Every line of it was written by an LLM, including this
+> warning. Verify outputs against [the Champions damage calculator](https://calc.pokemonshowdown.com/champions.html) before
+> trusting a spread it gives you. There exist some known issues which are being worked
+> upon, but there also exist unknown bugs.
+
 ## Setup
 
 ```bash
@@ -47,7 +53,7 @@ Same config, ignoring `BUDGET`/`TUNER`. Searches every valid split from the exis
 
 ## Multiple attackers
 
-For several simultaneous threats (multiple attackers, or one attacker with multiple moves), minimising *combined* damage:
+For several simultaneous threats (multiple attackers, or one attacker with multiple moves), minimising _combined_ damage:
 
 ```bash
 cp calc/multi/config.example.py calc/multi/config.py
