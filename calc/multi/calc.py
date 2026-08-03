@@ -201,6 +201,12 @@ def optimise_multi(
         # game's real 66-total-SP cap. No separate total check needed.
         stat = stats_used[0]
         existing_stat = existing_def if stat == "def" else existing_spd
+
+        # The intent of the user in this branch is to use all available SPs
+        # into bulk. Handle the case where they forget to reduce the budget
+        # correclty when adding existing stats input.
+        if existing_hp + existing_stat + budget > 64:
+            budget = 64 - (existing_hp + existing_stat)
         cap = min(budget, 64)
 
         for delta_stat in range(0, cap + 1):
@@ -237,6 +243,8 @@ def optimise_multi(
         # own explicit check below. The reachable ceiling for delta_hp +
         # delta_def + delta_spd is also 66 here, not 64 -- capping at 64 would
         # never even explore the 65/66-total spreads that check permits.
+        if existing_hp + existing_def + existing_spd + budget > 66:
+            budget = 66 - (existing_hp + existing_def + existing_spd)
         cap = min(budget, 66)
 
         for delta_def in range(0, cap + 1):
