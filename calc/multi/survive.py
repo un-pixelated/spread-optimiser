@@ -6,9 +6,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from core.shared import calc_hp
+from core.shared import ROOT_DIR, calc_hp
 
 from calc import parse_config_multi, NATURE_CANDIDATES, _hit, _spread_label
+
+OUTPUTS_DIR = ROOT_DIR / "outputs"
+OUTPUTS_DIR.mkdir(exist_ok=True)
+OUTPUTS_FILE = OUTPUTS_DIR / "outputs.txt"
 
 
 def find_min_sp_multi(
@@ -24,6 +28,7 @@ def find_min_sp_multi(
     field,
 ) -> dict | None:
     stats_used = sorted({a["defensive_stat"] for a in attackers})
+    evaluated = []
 
     def evaluate(HP_SP, spread):
         HP = None
@@ -71,6 +76,16 @@ def find_min_sp_multi(
                 spread = {"hp": HP_SP, stat: STAT_SP}
                 HP, per_attacker, total_dmg = evaluate(HP_SP, spread)
 
+                move_pcts = "  ".join(
+                    f"move{i}={pa['dmg'] / HP * 100:.1f}%"
+                    for i, pa in enumerate(per_attacker, 1)
+                )
+                sum_pct = total_dmg / HP * 100
+                evaluated.append(
+                    f"+{delta_hp:>2} HP / +{delta_stat:>2} {stat.upper()}  "
+                    f"(totals {HP_SP}/{STAT_SP})  {move_pcts}  sum={sum_pct:.2f}%"
+                )
+
                 if total_dmg < HP:
                     survivors.append(
                         {
@@ -89,6 +104,7 @@ def find_min_sp_multi(
                 return {
                     "stats_used": stats_used,
                     "best": max(survivors, key=lambda r: r["HP_SP"]),
+                    "evaluated": evaluated,
                 }
 
         return None
@@ -114,6 +130,16 @@ def find_min_sp_multi(
                 spread = {"hp": HP_SP, "def": DEF_SP, "spd": SPD_SP}
                 HP, per_attacker, total_dmg = evaluate(HP_SP, spread)
 
+                move_pcts = "  ".join(
+                    f"move{i}={pa['dmg'] / HP * 100:.1f}%"
+                    for i, pa in enumerate(per_attacker, 1)
+                )
+                sum_pct = total_dmg / HP * 100
+                evaluated.append(
+                    f"+{delta_hp:>2} HP / +{delta_def:>2} DEF / +{delta_spd:>2} SPD  "
+                    f"(totals {HP_SP}/{DEF_SP}/{SPD_SP})  {move_pcts}  sum={sum_pct:.2f}%"
+                )
+
                 if total_dmg < HP:
                     survivors.append(
                         {
@@ -134,14 +160,20 @@ def find_min_sp_multi(
             return {
                 "stats_used": stats_used,
                 "best": max(survivors, key=lambda r: r["HP_SP"]),
+                "evaluated": evaluated,
             }
 
     return None
 
 
-def report(result, nature):
+def report(result, nature, primary: bool = True):
     stats_used = result["stats_used"]
     best = result["best"]
+
+    if primary:
+        with open(OUTPUTS_FILE, "w") as sweep_log:
+            for line in result["evaluated"]:
+                sweep_log.write(line + "\n")
 
     print(f"\nDefender nature: {nature}")
     print("MINIMUM SP TO SURVIVE")
@@ -157,6 +189,10 @@ def report(result, nature):
         f"  Combined:  {best['total_dmg']} / {best['HP']} HP"
         f"  ({total_pct:.1f}% dealt, {100 - total_pct:.1f}% remaining, total +{best['total']} SP)"
     )
+
+    if primary:
+        print()
+        print(f"Sweep log: {OUTPUTS_FILE.relative_to(ROOT_DIR)}")
 
 
 if __name__ == "__main__":
@@ -187,7 +223,7 @@ if __name__ == "__main__":
         if result is None:
             print(not_survivable_msg)
         else:
-            report(result, nature)
+            report(result, nature, primary=True)
     else:
         candidates = {nature: run(nature) for nature in NATURE_CANDIDATES}
         valid = {nature: r for nature, r in candidates.items() if r is not None}
@@ -202,7 +238,7 @@ if __name__ == "__main__":
                     NATURE_CANDIDATES.index(n),
                 ),
             )
-            report(valid[winner], winner)
+            report(valid[winner], winner, primary=True)
 
             if winner != "Serious" and "Serious" in valid:
-                report(valid["Serious"], "Serious")
+                report(valid["Serious"], "Serious", primary=False)
