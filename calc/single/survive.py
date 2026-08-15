@@ -35,6 +35,8 @@ def find_min_sp(
     # below, so the combined total can never exceed 64 -- already under
     # Champions' real 66-total-SP cap. No separate total check needed.
     log_ctx = open(OUTPUTS_FILE, "w") if PRIMARY else contextlib.nullcontext()
+    best = None
+    best_pct = None
     with log_ctx as sweep_log:
         for total in range(0, 65):
             survivors = []
@@ -60,34 +62,45 @@ def find_min_sp(
                 result = calc_damage(attacker, defender, move, field)
                 HP = calc_hp(result["defenderBaseHp"], HP_SP)
                 DMG = result["max"]
+                pct = DMG / HP * 100
 
                 if PRIMARY:
-                    pct = DMG / HP * 100
                     sweep_log.write(
                         f"+{delta_hp:>2} HP / +{delta_def:>2} {defensive_stat.upper()}  "
                         f"(totals {HP_SP}/{DEF_SP}) -> {DMG}/{HP} ({pct:.2f}%)  [{result['desc']}]\n"
                     )
 
+                point = {
+                    "HP_SP": HP_SP,
+                    "DEF_SP": DEF_SP,
+                    "delta_hp": delta_hp,
+                    "delta_def": delta_def,
+                    "total": total,
+                    "DMG": DMG,
+                    "HP": HP,
+                    "desc": result["desc"],
+                }
+
+                # tracked across the whole sweep as a fallback for the
+                # not-survivable case, where the best available spread (lowest
+                # % dealt) is more useful than a bare "not survivable".
+                if best_pct is None or pct < best_pct:
+                    best_pct = pct
+                    best = point
+
                 if DMG < HP:
-                    survivors.append(
-                        {
-                            "HP_SP": HP_SP,
-                            "DEF_SP": DEF_SP,
-                            "delta_hp": delta_hp,
-                            "delta_def": delta_def,
-                            "total": total,
-                            "DMG": DMG,
-                            "HP": HP,
-                            "desc": result["desc"],
-                        }
-                    )
+                    survivors.append(point)
 
             if survivors:
                 # tie-break: prefer more HP over more of the defensive stat — HP
                 # helps against any threat, the defensive stat only helps this one.
-                return max(survivors, key=lambda r: r["HP_SP"])
+                winner = max(survivors, key=lambda r: r["HP_SP"])
+                winner["survives"] = True
+                return winner
 
-    return None
+    if best is not None:
+        best["survives"] = False
+    return best
 
 
 if __name__ == "__main__":
@@ -116,13 +129,11 @@ if __name__ == "__main__":
 
         stat = parsed["defensive_stat"].upper()
         print()
-        print("MINIMUM SP TO SURVIVE")
         if result is None:
-            print(
-                f"  Not survivable — even at 32 HP / 32 {stat}, the max roll still KOs."
-            )
+            print("NOT SURVIVABLE")
         else:
             pct = result["DMG"] / result["HP"] * 100
+            print("MINIMUM SP TO SURVIVE" if result["survives"] else "NOT SURVIVABLE")
             print(
                 f"  Spread:  {result['HP_SP']} HP / {result['DEF_SP']} {stat}"
                 f"  (+{result['delta_hp']} HP / +{result['delta_def']} {stat}, total +{result['total']} SP)"

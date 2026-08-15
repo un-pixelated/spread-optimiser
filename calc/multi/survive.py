@@ -62,6 +62,8 @@ def find_min_sp_multi(
     if len(stats_used) == 1:
         stat = stats_used[0]
         existing_stat = existing_def if stat == "def" else existing_spd
+        best_effort = None
+        best_effort_pct = None
 
         for total in range(0, 65):
             survivors = []
@@ -86,28 +88,46 @@ def find_min_sp_multi(
                     f"(totals {HP_SP}/{STAT_SP})  {move_pcts}  sum={sum_pct:.2f}%"
                 )
 
+                point = {
+                    "HP_SP": HP_SP,
+                    f"{stat}_SP": STAT_SP,
+                    "delta_hp": delta_hp,
+                    f"delta_{stat}": delta_stat,
+                    "total": total,
+                    "HP": HP,
+                    "per_attacker": per_attacker,
+                    "total_dmg": total_dmg,
+                }
+
+                # tracked across the whole sweep as a fallback for the
+                # not-survivable case, where the best available spread (lowest
+                # % dealt) is more useful than a bare "not survivable".
+                if best_effort_pct is None or sum_pct < best_effort_pct:
+                    best_effort_pct = sum_pct
+                    best_effort = point
+
                 if total_dmg < HP:
-                    survivors.append(
-                        {
-                            "HP_SP": HP_SP,
-                            f"{stat}_SP": STAT_SP,
-                            "delta_hp": delta_hp,
-                            f"delta_{stat}": delta_stat,
-                            "total": total,
-                            "HP": HP,
-                            "per_attacker": per_attacker,
-                            "total_dmg": total_dmg,
-                        }
-                    )
+                    survivors.append(point)
 
             if survivors:
+                best = max(survivors, key=lambda r: r["HP_SP"])
+                best["survives"] = True
                 return {
                     "stats_used": stats_used,
-                    "best": max(survivors, key=lambda r: r["HP_SP"]),
+                    "best": best,
                     "evaluated": evaluated,
                 }
 
-        return None
+        if best_effort is not None:
+            best_effort["survives"] = False
+        return {
+            "stats_used": stats_used,
+            "best": best_effort,
+            "evaluated": evaluated,
+        }
+
+    best_effort = None
+    best_effort_pct = None
 
     for total in range(0, 67):
         survivors = []
@@ -140,30 +160,45 @@ def find_min_sp_multi(
                     f"(totals {HP_SP}/{DEF_SP}/{SPD_SP})  {move_pcts}  sum={sum_pct:.2f}%"
                 )
 
+                point = {
+                    "HP_SP": HP_SP,
+                    "def_SP": DEF_SP,
+                    "spd_SP": SPD_SP,
+                    "delta_hp": delta_hp,
+                    "delta_def": delta_def,
+                    "delta_spd": delta_spd,
+                    "total": total,
+                    "HP": HP,
+                    "per_attacker": per_attacker,
+                    "total_dmg": total_dmg,
+                }
+
+                # tracked across the whole sweep as a fallback for the
+                # not-survivable case, where the best available spread (lowest
+                # % dealt) is more useful than a bare "not survivable".
+                if best_effort_pct is None or sum_pct < best_effort_pct:
+                    best_effort_pct = sum_pct
+                    best_effort = point
+
                 if total_dmg < HP:
-                    survivors.append(
-                        {
-                            "HP_SP": HP_SP,
-                            "def_SP": DEF_SP,
-                            "spd_SP": SPD_SP,
-                            "delta_hp": delta_hp,
-                            "delta_def": delta_def,
-                            "delta_spd": delta_spd,
-                            "total": total,
-                            "HP": HP,
-                            "per_attacker": per_attacker,
-                            "total_dmg": total_dmg,
-                        }
-                    )
+                    survivors.append(point)
 
         if survivors:
+            best = max(survivors, key=lambda r: r["HP_SP"])
+            best["survives"] = True
             return {
                 "stats_used": stats_used,
-                "best": max(survivors, key=lambda r: r["HP_SP"]),
+                "best": best,
                 "evaluated": evaluated,
             }
 
-    return None
+    if best_effort is not None:
+        best_effort["survives"] = False
+    return {
+        "stats_used": stats_used,
+        "best": best_effort,
+        "evaluated": evaluated,
+    }
 
 
 def report(result, nature, primary: bool = True):
@@ -176,7 +211,7 @@ def report(result, nature, primary: bool = True):
                 sweep_log.write(line + "\n")
 
     print(f"\nDefender nature: {nature}")
-    print("MINIMUM SP TO SURVIVE")
+    print("MINIMUM SP TO SURVIVE" if best["survives"] else "NOT SURVIVABLE")
     print(f"  Spread:  {_spread_label(stats_used, best)}")
     for i, pa in enumerate(best["per_attacker"], 1):
         pct = pa["dmg"] / best["HP"] * 100
@@ -212,33 +247,31 @@ if __name__ == "__main__":
             parsed["field"],
         )
 
-    not_survivable_msg = (
-        "\nNot survivable — even at the 32-per-stat / 66-total SP caps, "
-        "the combined max roll still KOs."
-    )
-
     if parsed["defender_nature"] is not None:
         nature = parsed["defender_nature"]
-        result = run(nature)
-        if result is None:
-            print(not_survivable_msg)
-        else:
-            report(result, nature, primary=True)
+        report(run(nature), nature, primary=True)
     else:
         candidates = {nature: run(nature) for nature in NATURE_CANDIDATES}
-        valid = {nature: r for nature, r in candidates.items() if r is not None}
+        survivable = {n: r for n, r in candidates.items() if r["best"]["survives"]}
 
-        if not valid:
-            print(not_survivable_msg)
-        else:
+        if survivable:
             winner = min(
-                valid,
+                survivable,
                 key=lambda n: (
-                    valid[n]["best"]["total"],
+                    survivable[n]["best"]["total"],
                     NATURE_CANDIDATES.index(n),
                 ),
             )
-            report(valid[winner], winner, primary=True)
+        else:
+            # nothing survives under any candidate nature — fall back to
+            # whichever candidate deals the least combined damage instead.
+            def pct(n):
+                best = candidates[n]["best"]
+                return best["total_dmg"] / best["HP"] * 100
 
-            if winner != "Serious" and "Serious" in valid:
-                report(valid["Serious"], "Serious", primary=False)
+            winner = min(candidates, key=lambda n: (pct(n), NATURE_CANDIDATES.index(n)))
+
+        report(candidates[winner], winner, primary=True)
+
+        if winner != "Serious":
+            report(candidates["Serious"], "Serious", primary=False)
