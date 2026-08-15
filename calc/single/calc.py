@@ -25,22 +25,27 @@ OUTPUTS_FILE = OUTPUTS_DIR / "outputs.txt"
 # ── tuner ────────────────────────────────────────────────
 # Among all spreads whose damage % is within `tolerance` pp of the
 # optimum, pick the one that maximises the prioritised stat's SP.
-# Ties broken by maximising the other stat.
+# Ties broken by maximising the other stat. If `tolerance` is omitted,
+# skip the near-optimal filter entirely and instead maximise the
+# prioritised stat's SP among only the spreads that survive the hit.
 
 
 def tune(
     results: list[dict],  # list of {HP_SP, DEF_SP, damage_dealt, DMG, HP, desc}
     def_stat: str,
     priority: str,  # 'hp' or def_stat
-    tolerance: float,  # percentage points, e.g. 0.5 means ±0.5%
+    tolerance: float | None,  # percentage points, e.g. 0.5 means ±0.5%; or None
 ) -> dict | None:
     if not results:
         return None
 
-    best_pct = min(r["damage_dealt"] for r in results) * 100
-    threshold = best_pct + tolerance  # we accept up to this % damage
+    if tolerance is None:
+        candidates = [r for r in results if r["damage_dealt"] < 1]
+    else:
+        best_pct = min(r["damage_dealt"] for r in results) * 100
+        threshold = best_pct + tolerance  # we accept up to this % damage
+        candidates = [r for r in results if r["damage_dealt"] * 100 <= threshold]
 
-    candidates = [r for r in results if r["damage_dealt"] * 100 <= threshold]
     if not candidates:
         return None
 
@@ -66,7 +71,7 @@ def optimise(
     FIELD: dict,
     TUNER: (
         dict | None
-    ) = None,  # {'priority': 'hp'|DEF_STAT, 'tolerance': float} or None
+    ) = None,  # {'priority': 'hp'|DEF_STAT, 'tolerance': float (optional)} or None
     PRIMARY: bool = True,  # writes outputs.txt; False for comparison-only runs
 ) -> float:
     all_results = []
@@ -162,18 +167,27 @@ def optimise(
     # ── tuner output ─────────────────────────────────────
     if TUNER:
         priority = TUNER["priority"]  # 'hp' or DEF_STAT
-        tolerance = TUNER["tolerance"]  # percentage points
+        tolerance = TUNER.get("tolerance")  # percentage points, optional
 
         tuned = tune(all_results, DEF_STAT, priority, tolerance)
 
         print()
-        print(f"TUNED  (priority: {priority.upper()}, tolerance: +{tolerance}%)")
+        if tolerance is None:
+            print(f"TUNED  (priority: {priority.upper()}, max SP among survivors)")
+        else:
+            print(f"TUNED  (priority: {priority.upper()}, tolerance: +{tolerance}%)")
 
-        if tuned is None or (
+        if tuned is None:
+            print(
+                "  No surviving spread found in this budget."
+                if tolerance is None
+                else "  No spread found within tolerance."
+            )
+        elif (
             tuned["HP_SP"] == optimal_stats["HP_SP"]
             and tuned[f"{DEF_STAT}_SP"] == optimal_stats["DEF_SP"]
         ):
-            print("  No different spread found within tolerance — same as optimal.")
+            print("  No different spread found — same as optimal.")
         else:
             t_pct = tuned["damage_dealt"] * 100
             opt_pct = minimum_dealt * 100

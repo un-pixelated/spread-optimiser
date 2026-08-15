@@ -52,6 +52,8 @@ IS_FRIEND_GUARD = False  # active for the defender's side
 
 # Among all spreads within TOLERANCE percentage points of optimal, pick the one
 # that maximises PRIORITY's SP instead of the outright lowest-damage spread.
-# Set to None to disable.
+# Omit TOLERANCE to instead maximise PRIORITY's SP among only the spreads
+# that survive the hit. Set TUNER to None to disable.
 TUNER = None
 # TUNER = {"priority": "hp", "tolerance": 0.5}  # priority: "hp" or DEFENSIVE_STAT
+# TUNER = {"priority": "hp"}  # no tolerance -> max SP among surviving spreads
