@@ -4,24 +4,30 @@
 # a full sweep log at outputs/outputs.txt.
 
 import sys
-import contextlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.shared import (
     ROOT_DIR,
+    OUTPUTS_FILE,
     calc_damage,
     calc_hp,
     clamp_boost,
+    build_defender,
+    budget_cap,
+    iter_spreads,
     VALID_NATURES,
     VALID_STATUSES,
 )
 
 import config
 
-OUTPUTS_DIR = ROOT_DIR / "outputs"
-OUTPUTS_DIR.mkdir(exist_ok=True)
-OUTPUTS_FILE = OUTPUTS_DIR / "outputs.txt"
+# Printed when no spread fits the SP caps under the configured budget.
+NO_SPREAD_MSG = (
+    "\nNo valid spread found — check your existing SPs / budget don't "
+    "push any stat past 32, or (with attackers hitting both DEF and "
+    "SPD) the combined HP+DEF+SPD total past 66."
+)
 
 # Only these three natures are ever worth trying: the defender never attacks
 # in this calculator, so a nature's "cost" only matters when it falls on the
@@ -137,16 +143,78 @@ def parse_config_multi() -> dict:
 
 
 def _hit(defender_name, nature, item, ability, status, spread, atk_entry, field):
-    defender = {
-        "name": defender_name,
-        "nature": nature,
-        "item": item,
-        "ability": ability,
-        "status": status,
-        "sp": spread,
-        "boosts": {atk_entry["defensive_stat"]: atk_entry["defender_boost"]},
-    }
+    defender = build_defender(
+        defender_name,
+        nature,
+        item,
+        ability,
+        status,
+        spread,
+        atk_entry["defensive_stat"],
+        atk_entry["defender_boost"],
+    )
     return calc_damage(atk_entry["attacker"], defender, atk_entry["move"], field)
+
+
+def evaluate(
+    attackers,
+    defender_name,
+    defender_nature,
+    defender_item,
+    defender_ability,
+    defender_status,
+    spread,
+    field,
+):
+    """Sum every attacker's max-roll damage against one spread.
+
+    Returns (HP, per_attacker, total_dmg). HP is computed once from the first
+    result's base HP and the spread's HP SP. Shared by optimise_multi() and
+    survive.py's find_min_sp_multi().
+    """
+    HP = None
+    total_dmg = 0
+    per_attacker = []
+    for a in attackers:
+        result = _hit(
+            defender_name,
+            defender_nature,
+            defender_item,
+            defender_ability,
+            defender_status,
+            spread,
+            a,
+            field,
+        )
+        if HP is None:
+            HP = calc_hp(result["defenderBaseHp"], spread["hp"])
+        dmg = result["max"]
+        total_dmg += dmg
+        per_attacker.append(
+            {
+                "name": a["attacker"]["name"],
+                "move": a["move"]["name"],
+                "dmg": dmg,
+                "desc": result["desc"],
+            }
+        )
+    return HP, per_attacker, total_dmg
+
+
+def _make_row(spread, deltas, HP, per_attacker, total_dmg, total_pct):
+    """Assemble a sweep row keyed the way _spread_label/report_multi expect:
+    HP_SP + delta_hp, plus <stat>_SP + delta_<stat> for each tracked stat."""
+    row = {"HP_SP": spread["hp"], "delta_hp": deltas["hp"]}
+    for stat in spread:
+        if stat == "hp":
+            continue
+        row[f"{stat}_SP"] = spread[stat]
+        row[f"delta_{stat}"] = deltas[stat]
+    row["HP"] = HP
+    row["per_attacker"] = per_attacker
+    row["total_dmg"] = total_dmg
+    row["total_pct"] = total_pct
+    return row
 
 
 def optimise_multi(
@@ -163,126 +231,34 @@ def optimise_multi(
     field: dict,
 ) -> dict | None:
     stats_used = sorted({a["defensive_stat"] for a in attackers})
+    # Track HP + only the defensive stats actually in play. With one stat the
+    # 2 x 32 = 64 ceiling already sits under the 66-total cap; with two, 66 is
+    # the binding ceiling (3 x 32 = 96 would overshoot it). iter_spreads owns
+    # the 32-per-stat and 66-total enforcement either way.
+    hard_cap = 64 if len(stats_used) == 1 else 66
+    all_existing = {"hp": existing_hp, "def": existing_def, "spd": existing_spd}
+    existing = {"hp": existing_hp, **{s: all_existing[s] for s in stats_used}}
+    cap = budget_cap(sum(existing.values()), budget, hard_cap)
+
     sweep = []
     best = None
+    for spread, deltas in iter_spreads(existing, stats_used, cap):
+        HP, per_attacker, total_dmg = evaluate(
+            attackers,
+            defender_name,
+            defender_nature,
+            defender_item,
+            defender_ability,
+            defender_status,
+            spread,
+            field,
+        )
+        total_pct = total_dmg / HP
+        row = _make_row(spread, deltas, HP, per_attacker, total_dmg, total_pct)
+        sweep.append(row)
 
-    def evaluate(HP_SP, spread):
-        per_attacker = []
-        total_dmg = 0
-        HP = None
-        for a in attackers:
-            result = _hit(
-                defender_name,
-                defender_nature,
-                defender_item,
-                defender_ability,
-                defender_status,
-                spread,
-                a,
-                field,
-            )
-            if HP is None:
-                HP = calc_hp(result["defenderBaseHp"], HP_SP)
-            dmg = result["max"]
-            total_dmg += dmg
-            per_attacker.append(
-                {
-                    "name": a["attacker"]["name"],
-                    "move": a["move"]["name"],
-                    "dmg": dmg,
-                    "desc": result["desc"],
-                }
-            )
-        return HP, per_attacker, total_dmg
-
-    if len(stats_used) == 1:
-        # Only 2 stats tracked here (HP + one defensive stat), each capped at
-        # 32, so the combined total can never exceed 64 -- already under the
-        # game's real 66-total-SP cap. No separate total check needed.
-        stat = stats_used[0]
-        existing_stat = existing_def if stat == "def" else existing_spd
-
-        # The intent of the user in this branch is to use all available SPs
-        # into bulk. Handle the case where they forget to reduce the budget
-        # correclty when adding existing stats input.
-        if existing_hp + existing_stat + budget > 64:
-            budget = 64 - (existing_hp + existing_stat)
-        cap = min(budget, 64)
-
-        for delta_stat in range(0, cap + 1):
-            delta_hp = cap - delta_stat
-            HP_SP = existing_hp + delta_hp
-            STAT_SP = existing_stat + delta_stat
-
-            if HP_SP > 32 or STAT_SP > 32:
-                continue
-
-            spread = {"hp": HP_SP, stat: STAT_SP}
-            HP, per_attacker, total_dmg = evaluate(HP_SP, spread)
-            total_pct = total_dmg / HP
-
-            row = {
-                "HP_SP": HP_SP,
-                f"{stat}_SP": STAT_SP,
-                "delta_hp": delta_hp,
-                f"delta_{stat}": delta_stat,
-                "HP": HP,
-                "per_attacker": per_attacker,
-                "total_dmg": total_dmg,
-                "total_pct": total_pct,
-            }
-            sweep.append(row)
-
-            if best is None or total_pct < best["total_pct"]:
-                best = row
-
-    else:
-        # Three stats tracked at once (HP + DEF + SPD) — unlike the single-stat
-        # branch above, the per-stat 32 caps alone don't bound the total below
-        # the game's real 66-total-SP cap (3 x 32 = 96 > 66), so it needs its
-        # own explicit check below. The reachable ceiling for delta_hp +
-        # delta_def + delta_spd is also 66 here, not 64 -- capping at 64 would
-        # never even explore the 65/66-total spreads that check permits.
-        if existing_hp + existing_def + existing_spd + budget > 66:
-            budget = 66 - (existing_hp + existing_def + existing_spd)
-        cap = min(budget, 66)
-
-        for delta_def in range(0, cap + 1):
-            for delta_spd in range(0, cap - delta_def + 1):
-                delta_hp = cap - delta_def - delta_spd
-
-                HP_SP = existing_hp + delta_hp
-                DEF_SP = existing_def + delta_def
-                SPD_SP = existing_spd + delta_spd
-
-                if (
-                    HP_SP > 32
-                    or DEF_SP > 32
-                    or SPD_SP > 32
-                    or HP_SP + DEF_SP + SPD_SP > 66
-                ):
-                    continue
-
-                spread = {"hp": HP_SP, "def": DEF_SP, "spd": SPD_SP}
-                HP, per_attacker, total_dmg = evaluate(HP_SP, spread)
-                total_pct = total_dmg / HP
-
-                row = {
-                    "HP_SP": HP_SP,
-                    "def_SP": DEF_SP,
-                    "spd_SP": SPD_SP,
-                    "delta_hp": delta_hp,
-                    "delta_def": delta_def,
-                    "delta_spd": delta_spd,
-                    "HP": HP,
-                    "per_attacker": per_attacker,
-                    "total_dmg": total_dmg,
-                    "total_pct": total_pct,
-                }
-                sweep.append(row)
-
-                if best is None or total_pct < best["total_pct"]:
-                    best = row
+        if best is None or total_pct < best["total_pct"]:
+            best = row
 
     if best is None:
         return None
@@ -303,6 +279,42 @@ def _spread_label(stats_used, row, prefix="") -> str:
     )
 
 
+def sweep_log_line(stats_used, row) -> str:
+    """One outputs.txt sweep line for `row` (a calc row or a survive point):
+    HP/stat deltas, running totals, each move's %, and the summed %."""
+    if len(stats_used) == 1:
+        stat = stats_used[0]
+        head = f"+{row['delta_hp']:>2} HP / +{row[f'delta_{stat}']:>2} {stat.upper()}"
+        totals = f"{row['HP_SP']}/{row[f'{stat}_SP']}"
+    else:
+        head = (
+            f"+{row['delta_hp']:>2} HP / +{row['delta_def']:>2} DEF"
+            f" / +{row['delta_spd']:>2} SPD"
+        )
+        totals = f"{row['HP_SP']}/{row['def_SP']}/{row['spd_SP']}"
+
+    move_pcts = "  ".join(
+        f"move{i}={pa['dmg'] / row['HP'] * 100:.1f}%"
+        for i, pa in enumerate(row["per_attacker"], 1)
+    )
+    sum_pct = row["total_dmg"] / row["HP"] * 100
+    return f"{head}  (totals {totals})  {move_pcts}  sum={sum_pct:.2f}%"
+
+
+def print_attacker_lines(best):
+    for i, pa in enumerate(best["per_attacker"], 1):
+        pct = pa["dmg"] / best["HP"] * 100
+        print(
+            f"  Move {i} ({pa['name']} — {pa['move']}):  {pa['dmg']} / {best['HP']} HP  ({pct:.1f}%)"
+        )
+        print(f"    {pa['desc']}")
+
+
+def select_nature(natures, metric):
+    """Lowest metric(nature) wins; ties break toward NATURE_CANDIDATES order."""
+    return min(natures, key=lambda n: (metric(n), NATURE_CANDIDATES.index(n)))
+
+
 def report_multi(result: dict, primary: bool):
     stats_used = result["stats_used"]
     best = result["best"]
@@ -310,35 +322,12 @@ def report_multi(result: dict, primary: bool):
     if primary:
         with open(OUTPUTS_FILE, "w") as sweep_log:
             for row in result["sweep"]:
-                if len(stats_used) == 1:
-                    stat = stats_used[0]
-                    head = f"+{row['delta_hp']:>2} HP / +{row[f'delta_{stat}']:>2} {stat.upper()}"
-                    totals = f"{row['HP_SP']}/{row[f'{stat}_SP']}"
-                else:
-                    head = (
-                        f"+{row['delta_hp']:>2} HP / +{row['delta_def']:>2} DEF"
-                        f" / +{row['delta_spd']:>2} SPD"
-                    )
-                    totals = f"{row['HP_SP']}/{row['def_SP']}/{row['spd_SP']}"
-
-                move_pcts = "  ".join(
-                    f"move{i}={pa['dmg'] / row['HP'] * 100:.1f}%"
-                    for i, pa in enumerate(row["per_attacker"], 1)
-                )
-                sum_pct = row["total_pct"] * 100
-                sweep_log.write(
-                    f"{head}  (totals {totals})  {move_pcts}  sum={sum_pct:.2f}%\n"
-                )
+                sweep_log.write(sweep_log_line(stats_used, row) + "\n")
 
     print()
     print("OPTIMAL")
     print(f"  Spread:  {_spread_label(stats_used, best)}")
-    for i, pa in enumerate(best["per_attacker"], 1):
-        pct = pa["dmg"] / best["HP"] * 100
-        print(
-            f"  Move {i} ({pa['name']} — {pa['move']}):  {pa['dmg']} / {best['HP']} HP  ({pct:.1f}%)"
-        )
-        print(f"    {pa['desc']}")
+    print_attacker_lines(best)
     total_pct = best["total_pct"] * 100
     print(
         f"  Combined:  {best['total_dmg']} / {best['HP']} HP"
@@ -373,11 +362,7 @@ if __name__ == "__main__":
         print(f"\nDefender nature: {nature}")
         result = run(nature)
         if result is None:
-            print(
-                "\nNo valid spread found — check your existing SPs / budget don't "
-                "push any stat past 32, or (with attackers hitting both DEF and "
-                "SPD) the combined HP+DEF+SPD total past 66."
-            )
+            print(NO_SPREAD_MSG)
         else:
             report_multi(result, primary=True)
     else:
@@ -385,19 +370,9 @@ if __name__ == "__main__":
         valid = {nature: r for nature, r in candidates.items() if r is not None}
 
         if not valid:
-            print(
-                "\nNo valid spread found — check your existing SPs / budget don't "
-                "push any stat past 32, or (with attackers hitting both DEF and "
-                "SPD) the combined HP+DEF+SPD total past 66."
-            )
+            print(NO_SPREAD_MSG)
         else:
-            winner = min(
-                valid,
-                key=lambda n: (
-                    valid[n]["best"]["total_pct"],
-                    NATURE_CANDIDATES.index(n),
-                ),
-            )
+            winner = select_nature(valid, lambda n: valid[n]["best"]["total_pct"])
             print(
                 f"\nDefender nature: {winner}  (auto-selected, lowest total damage among Bold/Calm/Serious)"
             )

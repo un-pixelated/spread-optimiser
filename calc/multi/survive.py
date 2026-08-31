@@ -6,13 +6,33 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from core.shared import ROOT_DIR, calc_hp
+from core.shared import ROOT_DIR, OUTPUTS_FILE, iter_spreads
 
-from calc import parse_config_multi, NATURE_CANDIDATES, _hit, _spread_label
+from calc import (
+    parse_config_multi,
+    NATURE_CANDIDATES,
+    evaluate,
+    select_nature,
+    print_attacker_lines,
+    sweep_log_line,
+    _spread_label,
+)
 
-OUTPUTS_DIR = ROOT_DIR / "outputs"
-OUTPUTS_DIR.mkdir(exist_ok=True)
-OUTPUTS_FILE = OUTPUTS_DIR / "outputs.txt"
+
+def _make_point(spread, deltas, total, HP, per_attacker, total_dmg):
+    """A survive sweep point, keyed like the calc rows (plus the diagonal
+    total) so sweep_log_line and _spread_label read it unchanged."""
+    point = {"HP_SP": spread["hp"], "delta_hp": deltas["hp"]}
+    for stat in spread:
+        if stat == "hp":
+            continue
+        point[f"{stat}_SP"] = spread[stat]
+        point[f"delta_{stat}"] = deltas[stat]
+    point["total"] = total
+    point["HP"] = HP
+    point["per_attacker"] = per_attacker
+    point["total_dmg"] = total_dmg
+    return point
 
 
 def find_min_sp_multi(
@@ -28,160 +48,42 @@ def find_min_sp_multi(
     field,
 ) -> dict | None:
     stats_used = sorted({a["defensive_stat"] for a in attackers})
-    evaluated = []
+    all_existing = {"hp": existing_hp, "def": existing_def, "spd": existing_spd}
+    existing = {"hp": existing_hp, **{s: all_existing[s] for s in stats_used}}
+    # 1 stat -> diagonals up to 64 (2 x 32); 2 stats -> up to 66 (the total-SP
+    # cap binds before 3 x 32 = 96 would). iter_spreads enforces both caps.
+    max_total = 64 if len(stats_used) == 1 else 66
 
-    def evaluate(HP_SP, spread):
-        HP = None
-        total_dmg = 0
-        per_attacker = []
-        for a in attackers:
-            result = _hit(
+    evaluated = []
+    best_effort = None
+    best_effort_pct = None
+
+    for total in range(0, max_total + 1):
+        survivors = []
+        for spread, deltas in iter_spreads(existing, stats_used, total):
+            HP, per_attacker, total_dmg = evaluate(
+                attackers,
                 defender_name,
                 nature,
                 defender_item,
                 defender_ability,
                 defender_status,
                 spread,
-                a,
                 field,
             )
-            if HP is None:
-                HP = calc_hp(result["defenderBaseHp"], HP_SP)
-            dmg = result["max"]
-            total_dmg += dmg
-            per_attacker.append(
-                {
-                    "name": a["attacker"]["name"],
-                    "move": a["move"]["name"],
-                    "dmg": dmg,
-                    "desc": result["desc"],
-                }
-            )
-        return HP, per_attacker, total_dmg
+            point = _make_point(spread, deltas, total, HP, per_attacker, total_dmg)
+            evaluated.append(sweep_log_line(stats_used, point))
 
-    if len(stats_used) == 1:
-        stat = stats_used[0]
-        existing_stat = existing_def if stat == "def" else existing_spd
-        best_effort = None
-        best_effort_pct = None
+            sum_pct = total_dmg / HP * 100
+            # tracked across the whole sweep as a fallback for the
+            # not-survivable case, where the best available spread (lowest
+            # % dealt) is more useful than a bare "not survivable".
+            if best_effort_pct is None or sum_pct < best_effort_pct:
+                best_effort_pct = sum_pct
+                best_effort = point
 
-        for total in range(0, 65):
-            survivors = []
-            for delta_stat in range(0, total + 1):
-                delta_hp = total - delta_stat
-                HP_SP = existing_hp + delta_hp
-                STAT_SP = existing_stat + delta_stat
-
-                if HP_SP > 32 or STAT_SP > 32:
-                    continue
-
-                spread = {"hp": HP_SP, stat: STAT_SP}
-                HP, per_attacker, total_dmg = evaluate(HP_SP, spread)
-
-                move_pcts = "  ".join(
-                    f"move{i}={pa['dmg'] / HP * 100:.1f}%"
-                    for i, pa in enumerate(per_attacker, 1)
-                )
-                sum_pct = total_dmg / HP * 100
-                evaluated.append(
-                    f"+{delta_hp:>2} HP / +{delta_stat:>2} {stat.upper()}  "
-                    f"(totals {HP_SP}/{STAT_SP})  {move_pcts}  sum={sum_pct:.2f}%"
-                )
-
-                point = {
-                    "HP_SP": HP_SP,
-                    f"{stat}_SP": STAT_SP,
-                    "delta_hp": delta_hp,
-                    f"delta_{stat}": delta_stat,
-                    "total": total,
-                    "HP": HP,
-                    "per_attacker": per_attacker,
-                    "total_dmg": total_dmg,
-                }
-
-                # tracked across the whole sweep as a fallback for the
-                # not-survivable case, where the best available spread (lowest
-                # % dealt) is more useful than a bare "not survivable".
-                if best_effort_pct is None or sum_pct < best_effort_pct:
-                    best_effort_pct = sum_pct
-                    best_effort = point
-
-                if total_dmg < HP:
-                    survivors.append(point)
-
-            if survivors:
-                best = max(survivors, key=lambda r: r["HP_SP"])
-                best["survives"] = True
-                return {
-                    "stats_used": stats_used,
-                    "best": best,
-                    "evaluated": evaluated,
-                }
-
-        if best_effort is not None:
-            best_effort["survives"] = False
-        return {
-            "stats_used": stats_used,
-            "best": best_effort,
-            "evaluated": evaluated,
-        }
-
-    best_effort = None
-    best_effort_pct = None
-
-    for total in range(0, 67):
-        survivors = []
-        for delta_def in range(0, total + 1):
-            for delta_spd in range(0, total - delta_def + 1):
-                delta_hp = total - delta_def - delta_spd
-
-                HP_SP = existing_hp + delta_hp
-                DEF_SP = existing_def + delta_def
-                SPD_SP = existing_spd + delta_spd
-
-                if (
-                    HP_SP > 32
-                    or DEF_SP > 32
-                    or SPD_SP > 32
-                    or HP_SP + DEF_SP + SPD_SP > 66
-                ):
-                    continue
-
-                spread = {"hp": HP_SP, "def": DEF_SP, "spd": SPD_SP}
-                HP, per_attacker, total_dmg = evaluate(HP_SP, spread)
-
-                move_pcts = "  ".join(
-                    f"move{i}={pa['dmg'] / HP * 100:.1f}%"
-                    for i, pa in enumerate(per_attacker, 1)
-                )
-                sum_pct = total_dmg / HP * 100
-                evaluated.append(
-                    f"+{delta_hp:>2} HP / +{delta_def:>2} DEF / +{delta_spd:>2} SPD  "
-                    f"(totals {HP_SP}/{DEF_SP}/{SPD_SP})  {move_pcts}  sum={sum_pct:.2f}%"
-                )
-
-                point = {
-                    "HP_SP": HP_SP,
-                    "def_SP": DEF_SP,
-                    "spd_SP": SPD_SP,
-                    "delta_hp": delta_hp,
-                    "delta_def": delta_def,
-                    "delta_spd": delta_spd,
-                    "total": total,
-                    "HP": HP,
-                    "per_attacker": per_attacker,
-                    "total_dmg": total_dmg,
-                }
-
-                # tracked across the whole sweep as a fallback for the
-                # not-survivable case, where the best available spread (lowest
-                # % dealt) is more useful than a bare "not survivable".
-                if best_effort_pct is None or sum_pct < best_effort_pct:
-                    best_effort_pct = sum_pct
-                    best_effort = point
-
-                if total_dmg < HP:
-                    survivors.append(point)
+            if total_dmg < HP:
+                survivors.append(point)
 
         if survivors:
             best = max(survivors, key=lambda r: r["HP_SP"])
@@ -213,12 +115,7 @@ def report(result, nature, primary: bool = True):
     print(f"\nDefender nature: {nature}")
     print("MINIMUM SP TO SURVIVE" if best["survives"] else "NOT SURVIVABLE")
     print(f"  Spread:  {_spread_label(stats_used, best)}")
-    for i, pa in enumerate(best["per_attacker"], 1):
-        pct = pa["dmg"] / best["HP"] * 100
-        print(
-            f"  Move {i} ({pa['name']} — {pa['move']}):  {pa['dmg']} / {best['HP']} HP  ({pct:.1f}%)"
-        )
-        print(f"    {pa['desc']}")
+    print_attacker_lines(best)
     total_pct = best["total_dmg"] / best["HP"] * 100
     print(
         f"  Combined:  {best['total_dmg']} / {best['HP']} HP"
@@ -255,13 +152,7 @@ if __name__ == "__main__":
         survivable = {n: r for n, r in candidates.items() if r["best"]["survives"]}
 
         if survivable:
-            winner = min(
-                survivable,
-                key=lambda n: (
-                    survivable[n]["best"]["total"],
-                    NATURE_CANDIDATES.index(n),
-                ),
-            )
+            winner = select_nature(survivable, lambda n: survivable[n]["best"]["total"])
         else:
             # nothing survives under any candidate nature — fall back to
             # whichever candidate deals the least combined damage instead.
@@ -269,7 +160,7 @@ if __name__ == "__main__":
                 best = candidates[n]["best"]
                 return best["total_dmg"] / best["HP"] * 100
 
-            winner = min(candidates, key=lambda n: (pct(n), NATURE_CANDIDATES.index(n)))
+            winner = select_nature(candidates, pct)
 
         report(candidates[winner], winner, primary=True)
 
