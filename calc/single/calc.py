@@ -2,25 +2,23 @@
 # Uses @smogon/calc via bridge.js for damage calculation
 
 import sys
-import contextlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.shared import (
     ROOT_DIR,
+    OUTPUTS_FILE,
     calc_damage,
     calc_hp,
     clamp_boost,
+    build_defender,
+    budget_cap,
+    iter_spreads,
     VALID_NATURES,
     VALID_STATUSES,
 )
 
 import config
-
-OUTPUTS_DIR = ROOT_DIR / "outputs"
-OUTPUTS_DIR.mkdir(exist_ok=True)
-OUTPUTS_FILE = OUTPUTS_DIR / "outputs.txt"
-
 
 # ── tuner ────────────────────────────────────────────────
 # Among all spreads whose damage % is within `tolerance` pp of the
@@ -55,108 +53,12 @@ def tune(
         return max(candidates, key=lambda r: (r[f"{def_stat}_SP"], r["HP_SP"]))
 
 
-def optimise(
-    ATTACKER: dict,
-    DEFENDER_NAME: str,
-    DEFENDER_NATURE: str,
-    DEFENDER_ABILITY: str,
-    DEFENDER_ITEM: str | None,
-    DEF_STAT: str,
-    DEFENDER_BOOST: int,
-    DEFENDER_STATUS: str | None,
-    EXISTING_HP: int,
-    EXISTING_DEF: int,
-    BUDGET: int,
-    MOVE: dict,
-    FIELD: dict,
-    TUNER: (
-        dict | None
-    ) = None,  # {'priority': 'hp'|DEF_STAT, 'tolerance': float (optional)} or None
-    PRIMARY: bool = True,  # writes outputs.txt; False for comparison-only runs
-) -> float:
-    all_results = []
-
-    optimal_stats = {}
-    minimum_dealt = float("inf")
-
-    # Only 2 stats tracked here (HP + DEF_STAT), each capped at 32 below, so
-    # the combined total can never exceed 64 -- already under Champions' real
-    # 66-total-SP cap. No separate total check needed (see calc/multi/calc.py
-    # for where that stops being true, with 3 tracked stats).
-    log_ctx = open(OUTPUTS_FILE, "w") if PRIMARY else contextlib.nullcontext()
-    with log_ctx as sweep_log:
-        # The intent of the user in this branch is to use all available SPs
-        # into bulk. Handle the case where they forget to reduce the budget
-        # correclty when adding existing stats input.
-        if EXISTING_HP + EXISTING_DEF + BUDGET > 64:
-            BUDGET = 64 - (EXISTING_HP + EXISTING_DEF)
-        for delta_def in range(0, min(BUDGET, 64) + 1):
-            delta_hp = min(BUDGET, 64) - delta_def
-
-            HP_SP = EXISTING_HP + delta_hp
-            DEF_SP = EXISTING_DEF + delta_def
-
-            if HP_SP > 32 or DEF_SP > 32:
-                continue
-
-            defender = {
-                "name": DEFENDER_NAME,
-                "nature": DEFENDER_NATURE,
-                "item": DEFENDER_ITEM,
-                "ability": DEFENDER_ABILITY,
-                "status": DEFENDER_STATUS,
-                "sp": {"hp": HP_SP, DEF_STAT: DEF_SP},
-                "boosts": {DEF_STAT: DEFENDER_BOOST},
-            }
-
-            result = calc_damage(ATTACKER, defender, MOVE, FIELD)
-            HP = calc_hp(result["defenderBaseHp"], HP_SP)
-            DMG = result["max"]
-            damage_dealt = DMG / HP
-
-            all_results.append(
-                {
-                    "HP_SP": HP_SP,
-                    f"{DEF_STAT}_SP": DEF_SP,
-                    "delta_hp": delta_hp,
-                    f"delta_{DEF_STAT}": delta_def,
-                    "damage_dealt": damage_dealt,
-                    "DMG": DMG,
-                    "HP": HP,
-                    "desc": result["desc"],
-                }
-            )
-
-            if PRIMARY:
-                sweep_log.write(
-                    f"+{delta_hp:>2} HP / +{delta_def:>2} {DEF_STAT.upper()}  "
-                    f"(totals {HP_SP}/{DEF_SP}) -> {damage_dealt * 100:.2f}%  [{result['desc']}]\n"
-                )
-
-            if damage_dealt < minimum_dealt:
-                minimum_dealt = damage_dealt
-                optimal_stats = {
-                    "HP_SP": HP_SP,
-                    "DEF_SP": DEF_SP,
-                    "delta_hp": delta_hp,
-                    "delta_def": delta_def,
-                    "DMG": DMG,
-                    "HP": HP,
-                    "desc": result["desc"],
-                }
-
-    if not optimal_stats:
-        print(
-            "No valid spread found — check your existing SPs / budget don't push either stat past 32."
-        )
-        return None
-
-    # ── optimal output ───────────────────────────────────
+def print_optimal(optimal_stats, def_stat, minimum_dealt):
     print()
     print("OPTIMAL")
     print(
-        f"  Spread:  {optimal_stats['HP_SP']} HP / {optimal_stats['DEF_SP']} {DEF_STAT.upper()}"
-        f"  (+{optimal_stats['delta_hp']} HP / +{optimal_stats['delta_def']} {DEF_STAT.upper()})"
+        f"  Spread:  {optimal_stats['HP_SP']} HP / {optimal_stats['DEF_SP']} {def_stat.upper()}"
+        f"  (+{optimal_stats['delta_hp']} HP / +{optimal_stats['delta_def']} {def_stat.upper()})"
     )
     print(
         f"  Damage:  {optimal_stats['DMG']} / {optimal_stats['HP']} HP"
@@ -164,46 +66,143 @@ def optimise(
     )
     print(f"  Desc:    {optimal_stats['desc']}")
 
-    # ── tuner output ─────────────────────────────────────
-    if TUNER:
-        priority = TUNER["priority"]  # 'hp' or DEF_STAT
-        tolerance = TUNER.get("tolerance")  # percentage points, optional
 
-        tuned = tune(all_results, DEF_STAT, priority, tolerance)
+def print_tuned(all_results, optimal_stats, def_stat, minimum_dealt, tuner):
+    priority = tuner["priority"]  # 'hp' or def_stat
+    tolerance = tuner.get("tolerance")  # percentage points, optional
 
-        print()
-        if tolerance is None:
-            print(f"TUNED  (priority: {priority.upper()}, max SP among survivors)")
-        else:
-            print(f"TUNED  (priority: {priority.upper()}, tolerance: +{tolerance}%)")
+    tuned = tune(all_results, def_stat, priority, tolerance)
 
-        if tuned is None:
-            print(
-                "  No surviving spread found in this budget."
-                if tolerance is None
-                else "  No spread found within tolerance."
+    print()
+    if tolerance is None:
+        print(f"TUNED  (priority: {priority.upper()}, max SP among survivors)")
+    else:
+        print(f"TUNED  (priority: {priority.upper()}, tolerance: +{tolerance}%)")
+
+    if tuned is None:
+        print(
+            "  No surviving spread found in this budget."
+            if tolerance is None
+            else "  No spread found within tolerance."
+        )
+    elif (
+        tuned["HP_SP"] == optimal_stats["HP_SP"]
+        and tuned[f"{def_stat}_SP"] == optimal_stats["DEF_SP"]
+    ):
+        print("  No different spread found — same as optimal.")
+    else:
+        t_pct = tuned["damage_dealt"] * 100
+        opt_pct = minimum_dealt * 100
+        sacrifice = t_pct - opt_pct
+
+        print(
+            f"  Spread:  {tuned['HP_SP']} HP / {tuned[f'{def_stat}_SP']} {def_stat.upper()}"
+            f"  (+{tuned['delta_hp']} HP / +{tuned[f'delta_{def_stat}']} {def_stat.upper()})"
+        )
+        print(
+            f"  Damage:  {tuned['DMG']} / {tuned['HP']} HP"
+            f"  ({t_pct:.1f}% dealt, {100 - t_pct:.1f}% remaining, +{sacrifice:.2f}% vs optimal)"
+        )
+        print(f"  Desc:    {tuned['desc']}")
+
+
+def optimise(
+    attacker: dict,
+    defender_name: str,
+    defender_nature: str,
+    defender_ability: str,
+    defender_item: str | None,
+    def_stat: str,
+    defender_boost: int,
+    defender_status: str | None,
+    existing_hp: int,
+    existing_def: int,
+    budget: int,
+    move: dict,
+    field: dict,
+    tuner: (
+        dict | None
+    ) = None,  # {'priority': 'hp'|def_stat, 'tolerance': float?} or None
+    primary: bool = True,  # writes outputs.txt; False for comparison-only runs
+) -> float:
+    all_results = []
+    log_lines = []
+    optimal_stats = {}
+    minimum_dealt = float("inf")
+
+    # Spread enumeration + the 32/stat and 66-total caps live in iter_spreads;
+    # this branch tracks only HP + def_stat, so budget_cap's 64 (2 x 32) ceiling
+    # already keeps the total under 66. The user may forget to reduce the budget
+    # after adding existing SPs -- budget_cap spends only what still fits.
+    existing = {"hp": existing_hp, def_stat: existing_def}
+    cap = budget_cap(existing_hp + existing_def, budget, 64)
+    for spread, deltas in iter_spreads(existing, [def_stat], cap):
+        HP_SP = spread["hp"]
+        DEF_SP = spread[def_stat]
+        delta_hp = deltas["hp"]
+        delta_def = deltas[def_stat]
+
+        defender = build_defender(
+            defender_name,
+            defender_nature,
+            defender_item,
+            defender_ability,
+            defender_status,
+            spread,
+            def_stat,
+            defender_boost,
+        )
+        result = calc_damage(attacker, defender, move, field)
+        HP = calc_hp(result["defenderBaseHp"], HP_SP)
+        DMG = result["max"]
+        damage_dealt = DMG / HP
+
+        all_results.append(
+            {
+                "HP_SP": HP_SP,
+                f"{def_stat}_SP": DEF_SP,
+                "delta_hp": delta_hp,
+                f"delta_{def_stat}": delta_def,
+                "damage_dealt": damage_dealt,
+                "DMG": DMG,
+                "HP": HP,
+                "desc": result["desc"],
+            }
+        )
+
+        if primary:
+            log_lines.append(
+                f"+{delta_hp:>2} HP / +{delta_def:>2} {def_stat.upper()}  "
+                f"(totals {HP_SP}/{DEF_SP}) -> {damage_dealt * 100:.2f}%  [{result['desc']}]"
             )
-        elif (
-            tuned["HP_SP"] == optimal_stats["HP_SP"]
-            and tuned[f"{DEF_STAT}_SP"] == optimal_stats["DEF_SP"]
-        ):
-            print("  No different spread found — same as optimal.")
-        else:
-            t_pct = tuned["damage_dealt"] * 100
-            opt_pct = minimum_dealt * 100
-            sacrifice = t_pct - opt_pct
 
-            print(
-                f"  Spread:  {tuned['HP_SP']} HP / {tuned[f'{DEF_STAT}_SP']} {DEF_STAT.upper()}"
-                f"  (+{tuned['delta_hp']} HP / +{tuned[f'delta_{DEF_STAT}']} {DEF_STAT.upper()})"
-            )
-            print(
-                f"  Damage:  {tuned['DMG']} / {tuned['HP']} HP"
-                f"  ({t_pct:.1f}% dealt, {100 - t_pct:.1f}% remaining, +{sacrifice:.2f}% vs optimal)"
-            )
-            print(f"  Desc:    {tuned['desc']}")
+        if damage_dealt < minimum_dealt:
+            minimum_dealt = damage_dealt
+            optimal_stats = {
+                "HP_SP": HP_SP,
+                "DEF_SP": DEF_SP,
+                "delta_hp": delta_hp,
+                "delta_def": delta_def,
+                "DMG": DMG,
+                "HP": HP,
+                "desc": result["desc"],
+            }
 
-    if PRIMARY:
+    if primary:
+        OUTPUTS_FILE.write_text("".join(line + "\n" for line in log_lines))
+
+    if not optimal_stats:
+        print(
+            "No valid spread found — check your existing SPs / budget don't push either stat past 32."
+        )
+        return None
+
+    print_optimal(optimal_stats, def_stat, minimum_dealt)
+
+    if tuner:
+        print_tuned(all_results, optimal_stats, def_stat, minimum_dealt, tuner)
+
+    if primary:
         print()
         print(f"Sweep log: {OUTPUTS_FILE.relative_to(ROOT_DIR)}")
 
@@ -343,6 +342,6 @@ if __name__ == "__main__":
             parsed["budget"],
             parsed["move"],
             parsed["field"],
-            TUNER=parsed["tuner"],
-            PRIMARY=primary,
+            tuner=parsed["tuner"],
+            primary=primary,
         )
