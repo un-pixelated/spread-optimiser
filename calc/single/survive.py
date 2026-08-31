@@ -3,17 +3,19 @@
 # (across HP + DEFENSIVE_STAT) where the max damage roll doesn't KO.
 
 import sys
-import contextlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from core.shared import ROOT_DIR, calc_damage, calc_hp
+from core.shared import (
+    ROOT_DIR,
+    OUTPUTS_FILE,
+    calc_damage,
+    calc_hp,
+    build_defender,
+    iter_spreads,
+)
 
 from calc import parse_config, resolve_defender_natures
-
-OUTPUTS_DIR = ROOT_DIR / "outputs"
-OUTPUTS_DIR.mkdir(exist_ok=True)
-OUTPUTS_FILE = OUTPUTS_DIR / "outputs.txt"
 
 
 def find_min_sp(
@@ -31,73 +33,76 @@ def find_min_sp(
     field,
     PRIMARY: bool = True,  # writes outputs.txt; False for comparison-only runs
 ) -> dict | None:
-    # Only 2 stats tracked here (HP + DEFENSIVE_STAT), each capped at 32
-    # below, so the combined total can never exceed 64 -- already under
-    # Champions' real 66-total-SP cap. No separate total check needed.
-    log_ctx = open(OUTPUTS_FILE, "w") if PRIMARY else contextlib.nullcontext()
+    # Only HP + DEFENSIVE_STAT are tracked; iter_spreads enforces the 32/stat
+    # (and 66-total) caps, so walking totals 0..64 covers every valid spread.
+    existing = {"hp": existing_hp, defensive_stat: existing_def}
+    log_lines = []
     best = None
     best_pct = None
-    with log_ctx as sweep_log:
-        for total in range(0, 65):
-            survivors = []
-            for delta_def in range(0, total + 1):
-                delta_hp = total - delta_def
 
-                HP_SP = existing_hp + delta_hp
-                DEF_SP = existing_def + delta_def
+    def flush_log():
+        if PRIMARY:
+            OUTPUTS_FILE.write_text("".join(line + "\n" for line in log_lines))
 
-                if HP_SP > 32 or DEF_SP > 32:
-                    continue
+    for total in range(0, 65):
+        survivors = []
+        for spread, deltas in iter_spreads(existing, [defensive_stat], total):
+            HP_SP = spread["hp"]
+            DEF_SP = spread[defensive_stat]
+            delta_hp = deltas["hp"]
+            delta_def = deltas[defensive_stat]
 
-                defender = {
-                    "name": defender_name,
-                    "nature": nature,
-                    "item": defender_item,
-                    "ability": defender_ability,
-                    "status": defender_status,
-                    "sp": {"hp": HP_SP, defensive_stat: DEF_SP},
-                    "boosts": {defensive_stat: defender_boost},
-                }
+            defender = build_defender(
+                defender_name,
+                nature,
+                defender_item,
+                defender_ability,
+                defender_status,
+                spread,
+                defensive_stat,
+                defender_boost,
+            )
+            result = calc_damage(attacker, defender, move, field)
+            HP = calc_hp(result["defenderBaseHp"], HP_SP)
+            DMG = result["max"]
+            pct = DMG / HP * 100
 
-                result = calc_damage(attacker, defender, move, field)
-                HP = calc_hp(result["defenderBaseHp"], HP_SP)
-                DMG = result["max"]
-                pct = DMG / HP * 100
+            if PRIMARY:
+                log_lines.append(
+                    f"+{delta_hp:>2} HP / +{delta_def:>2} {defensive_stat.upper()}  "
+                    f"(totals {HP_SP}/{DEF_SP}) -> {DMG}/{HP} ({pct:.2f}%)  [{result['desc']}]"
+                )
 
-                if PRIMARY:
-                    sweep_log.write(
-                        f"+{delta_hp:>2} HP / +{delta_def:>2} {defensive_stat.upper()}  "
-                        f"(totals {HP_SP}/{DEF_SP}) -> {DMG}/{HP} ({pct:.2f}%)  [{result['desc']}]\n"
-                    )
+            point = {
+                "HP_SP": HP_SP,
+                "DEF_SP": DEF_SP,
+                "delta_hp": delta_hp,
+                "delta_def": delta_def,
+                "total": total,
+                "DMG": DMG,
+                "HP": HP,
+                "desc": result["desc"],
+            }
 
-                point = {
-                    "HP_SP": HP_SP,
-                    "DEF_SP": DEF_SP,
-                    "delta_hp": delta_hp,
-                    "delta_def": delta_def,
-                    "total": total,
-                    "DMG": DMG,
-                    "HP": HP,
-                    "desc": result["desc"],
-                }
+            # tracked across the whole sweep as a fallback for the
+            # not-survivable case, where the best available spread (lowest
+            # % dealt) is more useful than a bare "not survivable".
+            if best_pct is None or pct < best_pct:
+                best_pct = pct
+                best = point
 
-                # tracked across the whole sweep as a fallback for the
-                # not-survivable case, where the best available spread (lowest
-                # % dealt) is more useful than a bare "not survivable".
-                if best_pct is None or pct < best_pct:
-                    best_pct = pct
-                    best = point
+            if DMG < HP:
+                survivors.append(point)
 
-                if DMG < HP:
-                    survivors.append(point)
+        if survivors:
+            # tie-break: prefer more HP over more of the defensive stat — HP
+            # helps against any threat, the defensive stat only helps this one.
+            winner = max(survivors, key=lambda r: r["HP_SP"])
+            winner["survives"] = True
+            flush_log()
+            return winner
 
-            if survivors:
-                # tie-break: prefer more HP over more of the defensive stat — HP
-                # helps against any threat, the defensive stat only helps this one.
-                winner = max(survivors, key=lambda r: r["HP_SP"])
-                winner["survives"] = True
-                return winner
-
+    flush_log()
     if best is not None:
         best["survives"] = False
     return best
