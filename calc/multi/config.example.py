@@ -60,3 +60,13 @@ IS_REFLECT = False
 IS_LIGHT_SCREEN = False
 IS_HELPING_HAND = False  # active for the attackers' side
 IS_FRIEND_GUARD = False  # active for the defender's side
+
+# Among all spreads within TOLERANCE percentage points of the optimal combined
+# damage, pick the one that maximises PRIORITY's SP instead of the outright
+# lowest-damage spread. Omit TOLERANCE to instead maximise PRIORITY's SP among
+# only the spreads that survive the combined damage. Set TUNER to None to
+# disable. PRIORITY must be "hp" or a defensive stat some attacker actually
+# hits ("def"/"spd").
+TUNER = None
+# TUNER = {"priority": "hp", "tolerance": 0.5}
+# TUNER = {"priority": "hp"}  # no tolerance -> max SP among surviving spreads

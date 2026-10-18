@@ -65,6 +65,7 @@ Config fields:
 1. **Defender** — as above, but nature `None` auto-picks the best of Bold/Calm/Serious by comparing total damage. Existing SPs: `EXISTING_HP_SP`, `EXISTING_DEF_SP`, `EXISTING_SPD_SP`. `BUDGET` is shared across all attackers. Champions caps SP at 32/stat and 66 total — both are validated.
 2. **`ATTACKERS`** — list of 2-4 attacker+move dicts (name/nature/item/ability/status/SPs, `attacking_stat`, `defensive_stat`, boost, move). Copy/append or delete a dict to change the count. Attackers can freely mix `def`- and `spd`-hitting moves.
 3. **Field** — shared across all attackers.
+4. **`TUNER`** (optional) — `None`, or `{"priority": "hp"|"def"|"spd", "tolerance": <pp>}` to pick the spread maximising `priority`'s SP among all spreads within `tolerance` of the optimal combined damage (priority must be a stat some attacker actually hits, or `"hp"`). Omit `tolerance` to maximise `priority`'s SP among only the spreads that survive the combined damage.
 
 Console-only; the full sweep also goes to `outputs/outputs.txt`.
 
@@ -74,4 +75,4 @@ For minimum SP to survive combined damage:
 python3 calc/multi/survive.py
 ```
 
-Same config, ignoring `BUDGET`.
+Same config, ignoring `BUDGET`/`TUNER`.

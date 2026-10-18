@@ -75,6 +75,15 @@ def parse_config_multi() -> dict:
         "Psychic",
     ), "config.TERRAIN must be one of None, 'Electric', 'Grassy', 'Misty', 'Psychic'"
 
+    if config.TUNER is not None:
+        # Priority must be a stat the search actually tracks: "hp" always,
+        # "def"/"spd" only if some attacker's move hits it.
+        tracked = ["hp"] + sorted({a["defensive_stat"] for a in config.ATTACKERS})
+        assert config.TUNER["priority"] in tracked, (
+            f"config.TUNER['priority'] {config.TUNER['priority']!r} must be one of "
+            f"{tracked} (only stats your attackers' moves actually hit, plus 'hp')"
+        )
+
     # Champions caps SP two ways: 32 per stat, 66 total across all stats on
     # one Pokemon. Checked upfront so a bad config value fails clearly here
     # instead of just silently filtering out every point in the search below.
@@ -139,6 +148,7 @@ def parse_config_multi() -> dict:
         "existing_spd": config.EXISTING_SPD_SP,
         "budget": config.BUDGET,
         "field": field,
+        "tuner": config.TUNER,
     }
 
 
@@ -310,12 +320,81 @@ def print_attacker_lines(best):
         print(f"    {pa['desc']}")
 
 
+# ── tuner ────────────────────────────────────────────────
+# Among all spreads whose combined damage % is within `tolerance` pp of the
+# optimum, pick the one that maximises the prioritised stat's SP. Ties broken
+# by maximising the remaining tracked stats. If `tolerance` is omitted, skip
+# the near-optimal filter entirely and instead maximise the prioritised
+# stat's SP among only the spreads that survive the combined damage.
+
+
+def tune_multi(
+    sweep: list[dict],  # optimise_multi()'s sweep rows
+    stats_used: list[str],
+    priority: str,  # 'hp', 'def', or 'spd' (must be tracked)
+    tolerance: float | None,  # percentage points, e.g. 0.5 means ±0.5%; or None
+) -> dict | None:
+    if not sweep:
+        return None
+
+    if tolerance is None:
+        candidates = [r for r in sweep if r["total_pct"] < 1]
+    else:
+        best_pct = min(r["total_pct"] for r in sweep) * 100
+        threshold = best_pct + tolerance  # we accept up to this % damage
+        candidates = [r for r in sweep if r["total_pct"] * 100 <= threshold]
+
+    if not candidates:
+        return None
+
+    order = [priority] + [s for s in ["hp", *stats_used] if s != priority]
+    return max(
+        candidates,
+        key=lambda r: tuple(r["HP_SP" if s == "hp" else f"{s}_SP"] for s in order),
+    )
+
+
+def print_tuned_multi(result: dict, tuner: dict):
+    stats_used = result["stats_used"]
+    best = result["best"]
+    priority = tuner["priority"]  # 'hp', 'def', or 'spd'
+    tolerance = tuner.get("tolerance")  # percentage points, optional
+
+    tuned = tune_multi(result["sweep"], stats_used, priority, tolerance)
+
+    print()
+    if tolerance is None:
+        print(f"TUNED  (priority: {priority.upper()}, max SP among survivors)")
+    else:
+        print(f"TUNED  (priority: {priority.upper()}, tolerance: +{tolerance}%)")
+
+    if tuned is None:
+        print(
+            "  No surviving spread found in this budget."
+            if tolerance is None
+            else "  No spread found within tolerance."
+        )
+    elif tuned is best:
+        print("  No different spread found — same as optimal.")
+    else:
+        t_pct = tuned["total_pct"] * 100
+        opt_pct = best["total_pct"] * 100
+        sacrifice = t_pct - opt_pct
+
+        print(f"  Spread:  {_spread_label(stats_used, tuned)}")
+        print_attacker_lines(tuned)
+        print(
+            f"  Combined:  {tuned['total_dmg']} / {tuned['HP']} HP"
+            f"  ({t_pct:.1f}% dealt, {100 - t_pct:.1f}% remaining, +{sacrifice:.2f}% vs optimal)"
+        )
+
+
 def select_nature(natures, metric):
     """Lowest metric(nature) wins; ties break toward NATURE_CANDIDATES order."""
     return min(natures, key=lambda n: (metric(n), NATURE_CANDIDATES.index(n)))
 
 
-def report_multi(result: dict, primary: bool):
+def report_multi(result: dict, primary: bool, tuner: dict | None = None):
     stats_used = result["stats_used"]
     best = result["best"]
 
@@ -333,6 +412,9 @@ def report_multi(result: dict, primary: bool):
         f"  Combined:  {best['total_dmg']} / {best['HP']} HP"
         f"  ({total_pct:.1f}% dealt, {100 - total_pct:.1f}% remaining)"
     )
+
+    if tuner:
+        print_tuned_multi(result, tuner)
 
     if primary:
         print()
@@ -364,7 +446,7 @@ if __name__ == "__main__":
         if result is None:
             print(NO_SPREAD_MSG)
         else:
-            report_multi(result, primary=True)
+            report_multi(result, primary=True, tuner=parsed["tuner"])
     else:
         candidates = {nature: run(nature) for nature in NATURE_CANDIDATES}
         valid = {nature: r for nature, r in candidates.items() if r is not None}
@@ -376,8 +458,8 @@ if __name__ == "__main__":
             print(
                 f"\nDefender nature: {winner}  (auto-selected, lowest total damage among Bold/Calm/Serious)"
             )
-            report_multi(valid[winner], primary=True)
+            report_multi(valid[winner], primary=True, tuner=parsed["tuner"])
 
             if winner != "Serious" and "Serious" in valid:
                 print("\nDefender nature: Serious  (neutral fallback, for comparison)")
-                report_multi(valid["Serious"], primary=False)
+                report_multi(valid["Serious"], primary=False, tuner=parsed["tuner"])
